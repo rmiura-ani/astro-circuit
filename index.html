@@ -455,13 +455,24 @@ class Game {
                 });
             };
 
-            // 全ての画像が読み終わるまで待機
+            // BGMの読み込み完了を待つPromiseを作成
+            const loadAudio = (audio) => {
+                return new Promise((resolve) => {
+                    audio.oncanplaythrough = () => resolve();
+                    audio.onerror = () => resolve(); // エラーでも進む
+                    audio.load(); // 読み込み開始
+                });
+            };
+
+            // 画像と一緒にBGMも待つ
             await Promise.all([
                 loadImage('assets/player.jfif'),
-                loadImage('assets/enemy.jfif')
+                loadImage('assets/enemy.jfif'),
+                loadAudio(this.audio.bgm) // これを追加
             ]);
 
             this.isLoaded = true;
+
             // ロード完了したら「Click to Start」を出す
             document.querySelector('#start-screen p').innerText = "Click to Start";
         } catch (e) { 
