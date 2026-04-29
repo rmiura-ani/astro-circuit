@@ -1,0 +1,9 @@
+# Windows特有のメタデータファイルを無視
+*:Zone.Identifier
+
+# mp3ファイル（アセット）を無視
+assets/*.mp3
+
+# その他、開発環境用ファイル
+.DS_Store
+Thumbs.db

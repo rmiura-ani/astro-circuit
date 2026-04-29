@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>ASTRO CIRCUIT</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        #game-container {
+            position: relative;
+        }
+        canvas {
+            background-color: #000;
+            border: 2px solid #555;
+            box-shadow: 0 0 15px rgba(100, 200, 255, 0.2);
+            image-rendering: pixelated; /* ドット絵をクッキリ表示する設定 */
+        }
+        #start-screen {
+            position: absolute;
+            top: 0; left: 0; width: 320px; height: 480px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.8);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="320" height="480"></canvas>
+    <div id="start-screen">
+        <h2>ASTRO CIRCUIT</h2>
+        <p>Click to Start</p>
+    </div>
+</div>
+
+<script>
+/**
+ * 入力管理クラス
+ */
+class InputManager {
+    constructor() {
+        this.keys = {};
+        window.addEventListener('keydown', (e) => this.keys[e.code] = true);
+        window.addEventListener('keyup', (e) => this.keys[e.code] = false);
+    }
+    isPressed(keyCode) {
+        return !!this.keys[keyCode];
+    }
+}
+
+/**
+ * オーディオ管理クラス
+ */
+class AudioManager {
+    constructor() {
+        this.bgm = new Audio('assets/bgm-stage1.mp3');
+        this.bgm.loop = true;
+        this.bgm.volume = 0.5;
+    }
+    playBGM() {
+        // ブラウザの制限を回避するため、ユーザーアクション後に発火
+        this.bgm.play().catch(e => console.log("BGM Play Error:", e));
+    }
+}
+
+/**
+ * 背景（星屑）クラス - 2層ラスタースクロール
+ */
+class Starfield {
+    constructor(width, height) {
+        this.width = width;
+        this.height = height;
+        this.starsLayer1 = this.createStars(40, 1); // 奥の星（遅い）
+        this.starsLayer2 = this.createStars(20, 3); // 手前の星（速い）
+    }
+    createStars(count, speed) {
+        const stars = [];
+        for (let i = 0; i < count; i++) {
+            stars.push({
+                x: Math.random() * this.width,
+                y: Math.random() * this.height,
+                speed: speed + (Math.random() * 0.5)
+            });
+        }
+        return stars;
+    }
+    update() {
+        const moveStars = (stars) => {
+            stars.forEach(star => {
+                star.y += star.speed;
+                if (star.y > this.height) {
+                    star.y = 0;
+                    star.x = Math.random() * this.width;
+                }
+            });
+        };
+        moveStars(this.starsLayer1);
+        moveStars(this.starsLayer2);
+    }
+    draw(ctx) {
+        ctx.fillStyle = '#888'; // 奥の星は暗め
+        this.starsLayer1.forEach(star => ctx.fillRect(star.x, star.y, 1, 1));
+        
+        ctx.fillStyle = '#FFF'; // 手前の星は明るめ
+        this.starsLayer2.forEach(star => ctx.fillRect(star.x, star.y, 2, 2));
+    }
+}
+
+/**
+ * 自機クラス
+ */
+class Player {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = 24;
+        this.height = 24;
+        this.speed = 5; // クイックな移動（慣性なし）
+        this.color = '#00FFFF';
+        
+        // 画像読み込みの準備（今はコメントアウト）
+        // this.image = new Image();
+        // this.image.src = 'assets/player.png';
+    }
+    update(input, canvasWidth, canvasHeight) {
+        if (input.isPressed('ArrowUp') && this.y > 0) this.y -= this.speed;
+        if (input.isPressed('ArrowDown') && this.y < canvasHeight - this.height) this.y += this.speed;
+        if (input.isPressed('ArrowLeft') && this.x > 0) this.x -= this.speed;
+        if (input.isPressed('ArrowRight') && this.x < canvasWidth - this.width) this.x += this.speed;
+    }
+    draw(ctx) {
+        // 画像が用意できたら以下を使用
+        // if (this.image.complete) {
+        //     ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+        // } else { ... }
+        
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+        
+        // キャノピー（コックピット）っぽく見せる装飾
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(this.x + 8, this.y + 4, 8, 6);
+    }
+}
+
+/**
+ * ゲーム管理クラス（メインループ）
+ */
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.width = this.canvas.width;
+        this.height = this.canvas.height;
+
+        // 各モジュールの初期化（疎結合）
+        this.input = new InputManager();
+        this.audio = new AudioManager();
+        this.starfield = new Starfield(this.width, this.height);
+        this.player = new Player(this.width / 2 - 12, this.height - 60);
+
+        // エンティティ（敵や弾）のリスト
+        this.entities = []; 
+        
+        this.isRunning = false;
+        this.lastTime = 0;
+    }
+
+    start() {
+        this.isRunning = true;
+        this.audio.playBGM();
+        document.getElementById('start-screen').style.display = 'none';
+        requestAnimationFrame((time) => this.loop(time));
+    }
+
+    update() {
+        this.starfield.update();
+        this.player.update(this.input, this.width, this.height);
+        
+        // 敵や弾の更新処理はここに追加していく
+        this.entities.forEach(entity => entity.update());
+    }
+
+    draw() {
+        // 画面クリア
+        this.ctx.fillStyle = '#000';
+        this.ctx.fillRect(0, 0, this.width, this.height);
+
+        this.starfield.draw(this.ctx);
+        this.player.draw(this.ctx);
+        
+        // 敵や弾の描画処理はここに追加していく
+        this.entities.forEach(entity => entity.draw(this.ctx));
+    }
+
+    loop(timestamp) {
+        if (!this.isRunning) return;
+
+        // 60FPS固定化などの処理を将来入れるためのtimestamp準備
+        const deltaTime = timestamp - this.lastTime;
+        this.lastTime = timestamp;
+
+        this.update();
+        this.draw();
+
+        requestAnimationFrame((time) => this.loop(time));
+    }
+}
+
+// 起動処理
+const game = new Game();
+document.getElementById('start-screen').addEventListener('click', () => {
+    if (!game.isRunning) {
+        game.start();
+    }
+});
+
+</script>
+</body>
+</html>
