@@ -3,8 +3,12 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ASTRO CIRCUIT</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; background-color: #111; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: 'Courier New', Courier, monospace; overflow: hidden; }
+        body {
+            margin: 0; background-color: #111; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; 
+            font-family: 'Press Start 2P', cursive;
+        }
         canvas { 
                     background-color: #000; 
                     border: 2px solid #555; 
@@ -13,8 +17,40 @@
                     object-fit: contain; /* アスペクト比を維持 */
                 }
         #game-container { position: relative; }
-        #start-screen { position: absolute; top: 0; left: 0; width: 320px; height: 480px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.8); cursor: pointer; }
-</style>
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column; /* ← これが重要！中身を「縦」に並べる */
+            justify-content: center; /* 垂直方向の中央 */
+            align-items: center;     /* 水平方向の中央 */
+            background: rgba(0, 0, 0, 0.8);
+            cursor: pointer;
+            z-index: 10;
+            text-align: center;
+        }
+
+        /* タイトルのスタイル */
+        #start-screen h2 {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 24px;
+            color: #0FF;
+            text-shadow: 3px 3px #F0F;
+            margin: 0; /* 余計な隙間を消す */
+        }
+
+        /* メッセージ（Loading... / GAME OVER）のスタイル */
+        #start-screen p {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 12px;
+            color: #FFF;
+            margin-top: 20px; /* タイトルとの間に少し隙間を作る */
+            line-height: 1.8;  /* 2行になった時の行間を広げる */
+        }
+    </style>
 </head>
 <body>
 
@@ -22,7 +58,7 @@
     <canvas id="gameCanvas" width="320" height="480"></canvas>
     <div id="start-screen">
         <h2>ASTRO CIRCUIT</h2>
-        <p>Click to Start</p>
+        <p>Loading Assets...</p>
     </div>
 </div>
 
@@ -192,8 +228,9 @@ class Enemy {
         }
     }
     draw(ctx) {
-        if (this.isLoaded) ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
-        else { ctx.fillStyle = '#F44'; ctx.fillRect(this.x, this.y, this.width, this.height); }
+        if (this.isLoaded) {
+            ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+        }
     }
 }
 
@@ -404,11 +441,32 @@ class Game {
 
     async init() {
         try {
+            // シナリオの読み込み
             const res = await fetch('scenario.json');
             const data = await res.json();
             this.enemyManager = new EnemyManager(data);
+
+            // 画像のプリロード（自機と敵）
+            const loadImage = (src) => {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.src = src;
+                    img.onload = () => resolve(img);
+                });
+            };
+
+            // 全ての画像が読み終わるまで待機
+            await Promise.all([
+                loadImage('assets/player.jfif'),
+                loadImage('assets/enemy.jfif')
+            ]);
+
             this.isLoaded = true;
-        } catch (e) { console.error("Scenario Error", e); }
+            // ロード完了したら「Click to Start」を出す
+            document.querySelector('#start-screen p').innerText = "Click to Start";
+        } catch (e) { 
+            console.error("Initialization Error", e); 
+        }
     }
 
     start() {
@@ -572,7 +630,7 @@ class Game {
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
             this.ctx.fillRect(0, this.height / 2 - 40, this.width, 80);
 
-            this.ctx.font = 'bold 24px "Courier New"';
+            this.ctx.font = '16px "Press Start 2P"'; // Google Fontsでの名前を指定
             this.ctx.fillStyle = '#0FF';
             this.ctx.textAlign = 'center';
             this.ctx.fillText('STAGE 1 CLEAR', this.width / 2, this.height / 2 + 8);
