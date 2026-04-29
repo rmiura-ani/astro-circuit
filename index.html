@@ -1,14 +1,20 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ASTRO CIRCUIT</title>
     <style>
         body { margin: 0; background-color: #111; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: 'Courier New', Courier, monospace; overflow: hidden; }
+        canvas { 
+                    background-color: #000; 
+                    border: 2px solid #555; 
+                    max-width: 95vw;  /* 画面幅の95%を上限にする */
+                    max-height: 85vh; /* 画面高さの85%を上限にする */
+                    object-fit: contain; /* アスペクト比を維持 */
+                }
         #game-container { position: relative; }
-        canvas { background-color: #000; border: 2px solid #555; box-shadow: 0 0 15px rgba(100, 200, 255, 0.2); image-rendering: pixelated; }
         #start-screen { position: absolute; top: 0; left: 0; width: 320px; height: 480px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.8); cursor: pointer; }
-    </style>
+</style>
 </head>
 <body>
 
@@ -25,8 +31,32 @@
 class InputManager {
     constructor() {
         this.keys = {};
+        this.touchX = null;
+        this.touchY = null;
+        this.isTouching = false;
+
         window.addEventListener('keydown', (e) => this.keys[e.code] = true);
         window.addEventListener('keyup', (e) => this.keys[e.code] = false);
+
+        // タッチ / マウスイベント
+        const canvas = document.getElementById('gameCanvas');
+        const handleTouch = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            // キャンバス内の座標に変換
+            this.touchX = (clientX - rect.left) * (canvas.width / rect.width);
+            this.touchY = (clientY - rect.top) * (canvas.height / rect.height);
+        };
+
+        canvas.addEventListener('mousedown', (e) => { this.isTouching = true; handleTouch(e); });
+        window.addEventListener('mousemove', (e) => { if (this.isTouching) handleTouch(e); });
+        window.addEventListener('mouseup', () => { this.isTouching = false; });
+
+        canvas.addEventListener('touchstart', (e) => { this.isTouching = true; handleTouch(e); e.preventDefault(); }, {passive: false});
+        canvas.addEventListener('touchmove', (e) => { handleTouch(e); e.preventDefault(); }, {passive: false});
+        canvas.addEventListener('touchend', () => { this.isTouching = false; });
     }
     isPressed(keyCode) { return !!this.keys[keyCode]; }
 }
@@ -222,10 +252,21 @@ class Player {
         this.alive = true; // ← 生存フラグを追加
     }
     update(input, cw, ch) {
+        // キーボード操作
         if (input.isPressed('ArrowUp') && this.y > 0) this.y -= this.speed;
         if (input.isPressed('ArrowDown') && this.y < ch - this.height) this.y += this.speed;
         if (input.isPressed('ArrowLeft') && this.x > 0) this.x -= this.speed;
         if (input.isPressed('ArrowRight') && this.x < cw - this.width) this.x += this.speed;
+
+        // タッチ操作（指の位置へ滑らかに移動）
+        if (input.isTouching && input.touchX !== null) {
+            const targetX = input.touchX - this.width / 2;
+            const targetY = input.touchY - this.height / 2;
+            
+            // 遊び（デッドゾーン）を作ってガタつき防止
+            if (Math.abs(this.x - targetX) > 2) this.x += (targetX - this.x) * 0.2;
+            if (Math.abs(this.y - targetY) > 2) this.y += (targetY - this.y) * 0.2;
+        }
     }
     draw(ctx) {
         if (!this.alive) return; // ← 死んでいるときは描画をスキップ！
@@ -483,7 +524,7 @@ class Game {
     update() {
         this.starfield.update();
 
-// スペースキーでもスタートできるように (isRunningがfalseの時に判定)
+        // スペースキーでもスタートできるように (isRunningがfalseの時に判定)
         if (!this.isRunning && this.input.isPressed('Space')) {
             this.start();
         }
@@ -500,11 +541,12 @@ class Game {
                     this.audio.fadeOutBGM(3000); // 3秒かけてフェードアウト
                 }
             }
-            if (this.input.isPressed('KeyZ') && this.frames % 10 === 0) {
+            // Zキー または 画面タッチ で発射
+            const isFiring = this.input.isPressed('KeyZ') || this.input.isTouching;
+            if (isFiring && this.frames % 10 === 0) {
                 this.entities.push(new Bullet(this.player.x + this.player.width/2 - 2, this.player.y));
                 this.audio.playShot();
-            }
-            this.checkCollisions();
+            }            this.checkCollisions();
             this.frames++;
         }
         if (this.isCleared) {
