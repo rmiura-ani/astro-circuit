@@ -4,35 +4,10 @@
     <meta charset="UTF-8">
     <title>ASTRO CIRCUIT</title>
     <style>
-        body {
-            margin: 0;
-            background-color: #111;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            color: white;
-            font-family: 'Courier New', Courier, monospace;
-        }
-        #game-container {
-            position: relative;
-        }
-        canvas {
-            background-color: #000;
-            border: 2px solid #555;
-            box-shadow: 0 0 15px rgba(100, 200, 255, 0.2);
-            image-rendering: pixelated; /* ドット絵をクッキリ表示する設定 */
-        }
-        #start-screen {
-            position: absolute;
-            top: 0; left: 0; width: 320px; height: 480px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: rgba(0, 0, 0, 0.8);
-            cursor: pointer;
-        }
+        body { margin: 0; background-color: #111; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: 'Courier New', Courier, monospace; overflow: hidden; }
+        #game-container { position: relative; }
+        canvas { background-color: #000; border: 2px solid #555; box-shadow: 0 0 15px rgba(100, 200, 255, 0.2); image-rendering: pixelated; }
+        #start-screen { position: absolute; top: 0; left: 0; width: 320px; height: 480px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.8); cursor: pointer; }
     </style>
 </head>
 <body>
@@ -46,187 +21,333 @@
 </div>
 
 <script>
-/**
- * 入力管理クラス
- */
+/** 入力管理 */
 class InputManager {
     constructor() {
         this.keys = {};
         window.addEventListener('keydown', (e) => this.keys[e.code] = true);
         window.addEventListener('keyup', (e) => this.keys[e.code] = false);
     }
-    isPressed(keyCode) {
-        return !!this.keys[keyCode];
-    }
+    isPressed(keyCode) { return !!this.keys[keyCode]; }
 }
 
-/**
- * オーディオ管理クラス
- */
+/** オーディオ管理 */
 class AudioManager {
     constructor() {
         this.bgm = new Audio('assets/bgm-stage1.mp3');
         this.bgm.loop = true;
-        this.bgm.volume = 0.5;
+        this.bgm.volume = 0.4;
+        this.shotSoundPath = 'assets/shot.wav';
+        this.explosionSoundPath = 'assets/explosion.wav';
     }
-    playBGM() {
-        // ブラウザの制限を回避するため、ユーザーアクション後に発火
-        this.bgm.play().catch(e => console.log("BGM Play Error:", e));
+    playBGM() { this.bgm.play().catch(e => console.log("BGM Error", e)); }
+    playShot() {
+        const sound = new Audio(this.shotSoundPath);
+        sound.volume = 0.3;
+        sound.play().catch(() => {});
+    }
+    playExplosion() {
+        const sound = new Audio(this.explosionSoundPath);
+        sound.volume = 0.5;
+        sound.play().catch(() => {});
     }
 }
 
-/**
- * 背景（星屑）クラス - 2層ラスタースクロール
- */
+/** 背景 */
 class Starfield {
     constructor(width, height) {
         this.width = width;
         this.height = height;
-        this.starsLayer1 = this.createStars(40, 1); // 奥の星（遅い）
-        this.starsLayer2 = this.createStars(20, 3); // 手前の星（速い）
+        this.starsLayer1 = this.createStars(40, 1);
+        this.starsLayer2 = this.createStars(20, 3);
     }
     createStars(count, speed) {
         const stars = [];
         for (let i = 0; i < count; i++) {
-            stars.push({
-                x: Math.random() * this.width,
-                y: Math.random() * this.height,
-                speed: speed + (Math.random() * 0.5)
-            });
+            stars.push({ x: Math.random() * this.width, y: Math.random() * this.height, speed: speed + (Math.random() * 0.5) });
         }
         return stars;
     }
     update() {
-        const moveStars = (stars) => {
-            stars.forEach(star => {
-                star.y += star.speed;
-                if (star.y > this.height) {
-                    star.y = 0;
-                    star.x = Math.random() * this.width;
-                }
-            });
-        };
-        moveStars(this.starsLayer1);
-        moveStars(this.starsLayer2);
+        const move = (stars) => stars.forEach(s => { s.y += s.speed; if (s.y > this.height) s.y = 0; });
+        move(this.starsLayer1); move(this.starsLayer2);
     }
     draw(ctx) {
-        ctx.fillStyle = '#888'; // 奥の星は暗め
-        this.starsLayer1.forEach(star => ctx.fillRect(star.x, star.y, 1, 1));
-        
-        ctx.fillStyle = '#FFF'; // 手前の星は明るめ
-        this.starsLayer2.forEach(star => ctx.fillRect(star.x, star.y, 2, 2));
+        ctx.fillStyle = '#888'; this.starsLayer1.forEach(s => ctx.fillRect(s.x, s.y, 1, 1));
+        ctx.fillStyle = '#FFF'; this.starsLayer2.forEach(s => ctx.fillRect(s.x, s.y, 2, 2));
     }
 }
 
-/**
- * 自機クラス
- */
+/** 自機 */
 class Player {
     constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.width = 24;
-        this.height = 24;
-        this.speed = 5; // クイックな移動（慣性なし）
-        this.color = '#00FFFF';
-        
-        // 画像読み込みの準備（今はコメントアウト）
-        // this.image = new Image();
-        // this.image.src = 'assets/player.png';
+        this.x = x; this.y = y;
+        this.width = 32; this.height = 32;
+        this.speed = 5;
+        this.image = new Image();
+        this.image.src = 'assets/player.jfif';
+        this.isLoaded = false;
+        this.image.onload = () => this.isLoaded = true;
+        this.alive = true; // ← 生存フラグを追加
     }
-    update(input, canvasWidth, canvasHeight) {
+    update(input, cw, ch) {
         if (input.isPressed('ArrowUp') && this.y > 0) this.y -= this.speed;
-        if (input.isPressed('ArrowDown') && this.y < canvasHeight - this.height) this.y += this.speed;
+        if (input.isPressed('ArrowDown') && this.y < ch - this.height) this.y += this.speed;
         if (input.isPressed('ArrowLeft') && this.x > 0) this.x -= this.speed;
-        if (input.isPressed('ArrowRight') && this.x < canvasWidth - this.width) this.x += this.speed;
+        if (input.isPressed('ArrowRight') && this.x < cw - this.width) this.x += this.speed;
     }
     draw(ctx) {
-        // 画像が用意できたら以下を使用
-        // if (this.image.complete) {
-        //     ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
-        // } else { ... }
-        
-        ctx.fillStyle = this.color;
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-        
-        // キャノピー（コックピット）っぽく見せる装飾
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(this.x + 8, this.y + 4, 8, 6);
+        if (!this.alive) return; // ← 死んでいるときは描画をスキップ！
+        if (this.isLoaded) ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+        else { ctx.fillStyle = '#0FF'; ctx.fillRect(this.x, this.y, this.width, this.height); }
     }
 }
 
-/**
- * ゲーム管理クラス（メインループ）
- */
+/** 弾 */
+class Bullet {
+    constructor(x, y) {
+        this.x = x; this.y = y;
+        this.width = 4; this.height = 12;
+        this.speed = 8; this.active = true;
+    }
+    update() { this.y -= this.speed; if (this.y < -12) this.active = false; }
+    draw(ctx) { ctx.fillStyle = '#FF0'; ctx.fillRect(this.x, this.y, this.width, this.height); }
+}
+
+/** 敵 */
+class Enemy {
+    constructor(x, y) {
+        this.x = x; this.y = y;
+        this.width = 32; this.height = 32;
+        this.speed = 2; this.active = true;
+        this.image = new Image();
+        this.image.src = 'assets/enemy.jfif';
+        this.isLoaded = false;
+        this.image.onload = () => this.isLoaded = true;
+    }
+    update() { this.y += this.speed; if (this.y > 480) this.active = false; }
+    draw(ctx) {
+        if (this.isLoaded) ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+        else { ctx.fillStyle = '#F44'; ctx.fillRect(this.x, this.y, this.width, this.height); }
+    }
+}
+
+/** サインカーブ敵 */
+class SineEnemy extends Enemy {
+    constructor(x, y, phase) {
+        super(x, y);
+        this.baseX = x; this.phase = phase;
+        this.amplitude = 50; this.frequency = 0.05;
+    }
+    update() {
+        this.y += this.speed;
+        this.x = this.baseX + Math.sin(this.phase) * this.amplitude;
+        this.phase += this.frequency;
+        if (this.y > 480) this.active = false;
+    }
+}
+
+/** 爆発パーティクル */
+class Particle {
+    constructor(x, y, type = 'enemy') {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.active = true;
+
+        if (type === 'player') {
+            // --- 自機用のド派手な設定 ---
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * 8 + 2;
+            this.vx = Math.cos(angle) * speed;
+            this.vy = Math.sin(angle) * speed;
+            this.life = 100; // 5秒待機に合わせて長く残る
+            this.size = Math.random() * 4 + 2;
+        } else {
+            // --- 敵用のシンプルな設定 ---
+            this.vx = (Math.random() - 0.5) * 6;
+            this.vy = (Math.random() - 0.5) * 6;
+            this.life = 20;
+            this.size = 2;
+        }
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        
+        if (this.type === 'player') {
+            this.vx *= 0.96; // じわっと広がる
+            this.vy *= 0.96;
+            this.size *= 0.98; // 徐々に小さくなる
+        }
+        
+        this.life--;
+        if (this.life <= 0) this.active = false;
+    }
+
+    draw(ctx) {
+        const ratio = this.life / (this.type === 'player' ? 100 : 20);
+        
+        if (this.type === 'player') {
+            // 自機：白→オレンジ→赤と変化する
+            ctx.fillStyle = `rgba(255, ${Math.floor(255 * ratio)}, ${Math.floor(100 * ratio)}, ${ratio})`;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            // 敵：シンプルな黄色
+            ctx.fillStyle = `rgba(255, 255, 100, ${ratio})`;
+            ctx.fillRect(this.x, this.y, this.size, this.size);
+        }
+    }
+}
+
+/** シナリオ管理 */
+class EnemyManager {
+    constructor(scenario) { this.scenario = scenario; this.currentIndex = 0; }
+    update(frame, game) {
+        while (this.currentIndex < this.scenario.length && this.scenario[this.currentIndex].frame === frame) {
+            const data = this.scenario[this.currentIndex];
+            let enemy = (data.type === 'sine') ? new SineEnemy(data.x, -32, 0) : new Enemy(data.x, -32);
+            if (data.amplitude) enemy.amplitude = data.amplitude;
+            game.entities.push(enemy);
+            this.currentIndex++;
+        }
+    }
+}
+
+/** ゲーム本体 */
 class Game {
     constructor() {
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
-        this.width = this.canvas.width;
-        this.height = this.canvas.height;
-
-        // 各モジュールの初期化（疎結合）
+        this.width = this.canvas.width; this.height = this.canvas.height;
         this.input = new InputManager();
         this.audio = new AudioManager();
         this.starfield = new Starfield(this.width, this.height);
-        this.player = new Player(this.width / 2 - 12, this.height - 60);
-
-        // エンティティ（敵や弾）のリスト
-        this.entities = []; 
-        
+        this.player = new Player(this.width / 2 - 16, this.height - 60);
+        this.entities = [];
         this.isRunning = false;
-        this.lastTime = 0;
+        this.frames = 0;
+        this.isLoaded = false;
+        this.enemyManager = null;
+    }
+
+    async init() {
+        try {
+            const res = await fetch('scenario.json');
+            const data = await res.json();
+            this.enemyManager = new EnemyManager(data);
+            this.isLoaded = true;
+        } catch (e) { console.error("Scenario Error", e); }
     }
 
     start() {
+        if (!this.isLoaded) return;
         this.isRunning = true;
         this.audio.playBGM();
         document.getElementById('start-screen').style.display = 'none';
-        requestAnimationFrame((time) => this.loop(time));
+        requestAnimationFrame((t) => this.loop(t));
+    }
+
+    gameOver() {
+        if (!this.isRunning) return; // 二重呼び出し防止
+        this.isRunning = false;
+        this.player.alive = false; // ← ここで自機を画面から消す！
+
+        // 音の再生
+        if (this.audio.bgm) { 
+            this.audio.bgm.pause(); 
+            this.audio.bgm.currentTime = 0; 
+        }
+        this.audio.playExplosion();
+
+        // 自機用のド派手な爆発をここで生成（'player' を指定）
+        for(let i = 0; i < 60; i++) {
+            this.entities.push(new Particle(this.player.x + 16, this.player.y + 16, 'player'));
+        }
+
+        // 5秒待機
+        setTimeout(() => {
+            const startScreen = document.getElementById('start-screen');
+            startScreen.style.display = 'flex';
+            startScreen.querySelector('p').innerText = "GAME OVER\nClick to Restart";
+            this.reset();
+        }, 5000);
+    }
+
+    reset() {
+        this.entities = []; this.frames = 0;
+        if (this.enemyManager) this.enemyManager.currentIndex = 0;
+        this.player.x = this.width / 2 - 16;
+        this.player.y = this.height - 60;
+    }
+
+    checkCollisions() {
+        const bullets = this.entities.filter(e => e instanceof Bullet && e.active);
+        const enemies = this.entities.filter(e => e instanceof Enemy && e.active);
+
+        // 弾 vs 敵
+        bullets.forEach(b => {
+            enemies.forEach(e => {
+                if (b.x < e.x + e.width && b.x + b.width > e.x && b.y < e.y + e.height && b.y + b.height > e.y) {
+                    b.active = false; e.active = false;
+                    for(let i=0; i<8; i++) this.entities.push(new Particle(e.x + 16, e.y + 16, 'enemy'));
+                }
+            });
+        });
+
+        // 自機 vs 敵
+        if (this.isRunning) {
+            enemies.forEach(e => {
+                if (e.x < this.player.x + this.player.width && e.x + e.width > this.player.x && e.y < this.player.y + this.player.height && e.y + e.height > this.player.y) {
+                    this.gameOver();
+                }
+            });
+        }
     }
 
     update() {
         this.starfield.update();
         this.player.update(this.input, this.width, this.height);
-        
-        // 敵や弾の更新処理はここに追加していく
-        this.entities.forEach(entity => entity.update());
+        if (this.enemyManager) this.enemyManager.update(this.frames, this);
+
+        if (this.input.isPressed('KeyZ') && this.frames % 10 === 0) {
+            this.entities.push(new Bullet(this.player.x + this.player.width/2 - 2, this.player.y));
+            this.audio.playShot();
+        }
+
+        this.checkCollisions();
+        this.entities = this.entities.filter(e => { e.update(); return e.active; });
+        this.frames++;
     }
 
     draw() {
-        // 画面クリア
-        this.ctx.fillStyle = '#000';
-        this.ctx.fillRect(0, 0, this.width, this.height);
-
+        this.ctx.fillStyle = '#000'; this.ctx.fillRect(0, 0, this.width, this.height);
         this.starfield.draw(this.ctx);
         this.player.draw(this.ctx);
-        
-        // 敵や弾の描画処理はここに追加していく
-        this.entities.forEach(entity => entity.draw(this.ctx));
+        this.entities.forEach(e => e.draw(this.ctx));
     }
 
-    loop(timestamp) {
-        if (!this.isRunning) return;
-
-        // 60FPS固定化などの処理を将来入れるためのtimestamp準備
-        const deltaTime = timestamp - this.lastTime;
-        this.lastTime = timestamp;
-
-        this.update();
+    loop() {
+        // isRunningがfalseでも、爆発アニメ（entities）を動かすためにupdateとdrawを呼ぶ
+        this.update(); 
         this.draw();
 
-        requestAnimationFrame((time) => this.loop(time));
+        // gameOverになった後、5秒間はここが回り続ける
+        requestAnimationFrame(() => this.loop());
     }
 }
 
-// 起動処理
 const game = new Game();
-document.getElementById('start-screen').addEventListener('click', () => {
-    if (!game.isRunning) {
+game.init().then(() => {
+    document.getElementById('start-screen').addEventListener('click', () => {
+        const p = document.querySelector('#start-screen p');
+        if (p.innerText.includes("GAME OVER")) p.innerText = "Click to Start";
         game.start();
-    }
+    });
 });
-
 </script>
 </body>
 </html>

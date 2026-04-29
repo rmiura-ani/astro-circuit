@@ -1,0 +1,8 @@
+[
+  { "frame": 60,  "type": "straight", "x": 50 },
+  { "frame": 120, "type": "straight", "x": 270 },
+  { "frame": 180, "type": "sine",     "x": 160, "amplitude": 60 },
+  { "frame": 300, "type": "straight", "x": 100 },
+  { "frame": 450, "type": "sine",     "x": 80,  "amplitude": 40 },
+  { "frame": 450, "type": "sine",     "x": 240, "amplitude": 40 }
+]
