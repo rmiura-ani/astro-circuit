@@ -78,6 +78,76 @@ class Starfield {
     }
 }
 
+/** 敵の弾クラス */
+class EnemyBullet {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = 20;
+        this.height = 20;
+        this.speed = 4; // 敵本体より少し速い
+        this.active = true;
+    }
+    update(game) {
+        this.y += this.speed;
+        if (this.y > 480) this.active = false;
+    }
+    draw(ctx) {
+        ctx.fillStyle = '#F0F'; // 敵の弾はマゼンタ（ピンク）で見やすく
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+/** 敵 */
+class Enemy {
+    constructor(x, y) {
+        this.x = x; this.y = y;
+        this.width = 32; this.height = 32;
+        this.speed = 2; this.active = true;
+        this.shootTimer = Math.random() * 60; // 発射タイミングをバラけさせる
+        this.image = new Image();
+        this.image.src = 'assets/enemy.jfif';
+        this.isLoaded = false;
+        this.image.onload = () => this.isLoaded = true;
+    }
+    update(game) { // 引数にgameを追加してentitiesにアクセスできるようにする
+        this.y += this.speed;
+        if (this.y > 480) this.active = false;
+
+        // 弾の発射（gameオブジェクトがある場合のみ）
+        if (this.active && game) {
+            this.shootTimer++;
+            if (this.shootTimer > 120) {
+                const eb = new EnemyBullet(this.x + this.width / 2, this.y + this.height);
+                game.entities.push(eb); // ここで game.entities に追加
+console.log("SUCCESS: Pushed to game.entities", game.entities.length);
+                this.shootTimer = 0;
+            }
+        }
+    }
+    draw(ctx) {
+        if (this.isLoaded) ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+        else { ctx.fillStyle = '#F44'; ctx.fillRect(this.x, this.y, this.width, this.height); }
+    }
+}
+
+/** サインカーブ敵 */
+class SineEnemy extends Enemy {
+    constructor(x, y, phase) {
+        super(x, y);
+        this.baseX = x; this.phase = phase;
+        this.amplitude = 50; this.frequency = 0.05;
+    }
+    update(game) {
+        super.update(game);
+        this.x = this.baseX + Math.sin(this.phase) * this.amplitude;
+        this.phase += this.frequency;
+    }
+}
+
+
 /** 自機 */
 class Player {
     constructor(x, y) {
@@ -110,41 +180,8 @@ class Bullet {
         this.width = 4; this.height = 12;
         this.speed = 8; this.active = true;
     }
-    update() { this.y -= this.speed; if (this.y < -12) this.active = false; }
+    update(game) { this.y -= this.speed; if (this.y < -12) this.active = false; }
     draw(ctx) { ctx.fillStyle = '#FF0'; ctx.fillRect(this.x, this.y, this.width, this.height); }
-}
-
-/** 敵 */
-class Enemy {
-    constructor(x, y) {
-        this.x = x; this.y = y;
-        this.width = 32; this.height = 32;
-        this.speed = 2; this.active = true;
-        this.image = new Image();
-        this.image.src = 'assets/enemy.jfif';
-        this.isLoaded = false;
-        this.image.onload = () => this.isLoaded = true;
-    }
-    update() { this.y += this.speed; if (this.y > 480) this.active = false; }
-    draw(ctx) {
-        if (this.isLoaded) ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
-        else { ctx.fillStyle = '#F44'; ctx.fillRect(this.x, this.y, this.width, this.height); }
-    }
-}
-
-/** サインカーブ敵 */
-class SineEnemy extends Enemy {
-    constructor(x, y, phase) {
-        super(x, y);
-        this.baseX = x; this.phase = phase;
-        this.amplitude = 50; this.frequency = 0.05;
-    }
-    update() {
-        this.y += this.speed;
-        this.x = this.baseX + Math.sin(this.phase) * this.amplitude;
-        this.phase += this.frequency;
-        if (this.y > 480) this.active = false;
-    }
 }
 
 /** 爆発パーティクル */
@@ -172,7 +209,7 @@ class Particle {
         }
     }
 
-    update() {
+    update(game) {
         this.x += this.vx;
         this.y += this.vy;
         
@@ -229,6 +266,7 @@ class Game {
         this.player = new Player(this.width / 2 - 16, this.height - 60);
         this.entities = [];
         this.isRunning = false;
+        this.loopStarted = false; 
         this.frames = 0;
         this.isLoaded = false;
         this.enemyManager = null;
@@ -245,10 +283,17 @@ class Game {
 
     start() {
         if (!this.isLoaded) return;
+        if (this.isRunning) return;
+        
         this.isRunning = true;
         this.audio.playBGM();
         document.getElementById('start-screen').style.display = 'none';
-        requestAnimationFrame((t) => this.loop(t));
+
+        // 最初の1回目だけループを起動するフラグ管理
+        if (!this.loopStarted) {
+            this.loopStarted = true;
+            requestAnimationFrame((t) => this.loop(t));
+        }
     }
 
     gameOver() {
@@ -278,17 +323,25 @@ class Game {
     }
 
     reset() {
-        this.entities = []; this.frames = 0;
+        this.entities = []; 
+        this.frames = 0;
         if (this.enemyManager) this.enemyManager.currentIndex = 0;
-        this.player.x = this.width / 2 - 16;
+        
+        // プレイヤーの復活処理
+        this.player.alive = true; // 生存フラグを戻す
+        this.player.x = this.width / 2 - 16; // 位置を中央に戻す
         this.player.y = this.height - 60;
+        
+        console.log("Player reset: alive =", this.player.alive);
     }
 
     checkCollisions() {
+        // 画面内に存在する「自機の弾」「敵」「敵の弾」をそれぞれ仕分け
         const bullets = this.entities.filter(e => e instanceof Bullet && e.active);
         const enemies = this.entities.filter(e => e instanceof Enemy && e.active);
+        const eBullets = this.entities.filter(e => e instanceof EnemyBullet && e.active); 
 
-        // 弾 vs 敵
+        // ① 自機の弾 vs 敵
         bullets.forEach(b => {
             enemies.forEach(e => {
                 if (b.x < e.x + e.width && b.x + b.width > e.x && b.y < e.y + e.height && b.y + b.height > e.y) {
@@ -298,10 +351,24 @@ class Game {
             });
         });
 
-        // 自機 vs 敵
-        if (this.isRunning) {
+        // ゲームオーバー判定（自機が生きている時のみ）
+        if (this.isRunning && this.player.alive) {
+            // ② 敵の弾 vs 自機
+            eBullets.forEach(eb => {
+                if (eb.x < this.player.x + this.player.width &&
+                    eb.x + eb.width > this.player.x &&
+                    eb.y < this.player.y + this.player.height &&
+                    eb.y + eb.height > this.player.y) {
+                    this.gameOver();
+                }
+            });
+
+            // ③ 敵本体 vs 自機
             enemies.forEach(e => {
-                if (e.x < this.player.x + this.player.width && e.x + e.width > this.player.x && e.y < this.player.y + this.player.height && e.y + e.height > this.player.y) {
+                if (e.x < this.player.x + this.player.width &&
+                    e.x + e.width > this.player.x &&
+                    e.y < this.player.y + this.player.height &&
+                    e.y + e.height > this.player.y) {
                     this.gameOver();
                 }
             });
@@ -310,24 +377,31 @@ class Game {
 
     update() {
         this.starfield.update();
-        this.player.update(this.input, this.width, this.height);
-        if (this.enemyManager) this.enemyManager.update(this.frames, this);
+        
+        if (this.isRunning && this.player.alive) { // プレイヤーが生きている時だけ動かす
+            this.player.update(this.input, this.width, this.height);
+            if (this.enemyManager) this.enemyManager.update(this.frames, this);
 
-        if (this.input.isPressed('KeyZ') && this.frames % 10 === 0) {
-            this.entities.push(new Bullet(this.player.x + this.player.width/2 - 2, this.player.y));
-            this.audio.playShot();
+            if (this.input.isPressed('KeyZ') && this.frames % 10 === 0) {
+                this.entities.push(new Bullet(this.player.x + this.player.width/2 - 2, this.player.y));
+                this.audio.playShot();
+            }
+            this.checkCollisions();
+            this.frames++;
         }
-
-        this.checkCollisions();
-        this.entities = this.entities.filter(e => { e.update(); return e.active; });
-        this.frames++;
+        // 全エンティティの更新
+        const currentEntities = [...this.entities]; 
+            currentEntities.forEach(e => {
+                if (e.update) e.update(this);
+            });
+        this.entities = this.entities.filter(e => e.active);
     }
 
     draw() {
         this.ctx.fillStyle = '#000'; this.ctx.fillRect(0, 0, this.width, this.height);
         this.starfield.draw(this.ctx);
-        this.player.draw(this.ctx);
         this.entities.forEach(e => e.draw(this.ctx));
+        this.player.draw(this.ctx);
     }
 
     loop() {
