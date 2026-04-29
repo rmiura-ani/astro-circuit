@@ -41,6 +41,24 @@ class AudioManager {
         this.explosionSoundPath = 'assets/explosion.wav';
     }
     playBGM() { this.bgm.play().catch(e => console.log("BGM Error", e)); }
+    fadeOutBGM(duration = 2000) {
+        if (!this.bgm) return;
+        const startVolume = this.bgm.volume;
+        const step = startVolume / (duration / 50);
+        const interval = setInterval(() => {
+            if (this.bgm.volume > step) {
+                this.bgm.volume -= step;
+            } else {
+                this.bgm.volume = 0;
+                this.bgm.pause();
+                clearInterval(interval);
+            }
+        }, 50);
+    }
+    resetBGM() {
+        this.bgm.currentTime = 0;
+        this.bgm.volume = 0.4;
+    }
     playShot() {
         const sound = new Audio(this.shotSoundPath);
         sound.volume = 0.3;
@@ -104,37 +122,43 @@ class Enemy {
             }
         }
     }
-
     shoot(game) {
-        // 敵の中心 (x + width/2) を弾のX座標にする
         const bx = this.x + this.width / 2;
-        
-        // 敵の少し下 (y + height) から弾を出す
-        // もし画像の中央付近から出したい場合は y + this.height/2 に調整してください
         const by = this.y + this.height;
+
+        // 自機への角度を共通で計算しておく
+        const dx = (game.player.x + 16) - bx;
+        const dy = (game.player.y + 16) - by;
+        const baseAngle = Math.atan2(dy, dx);
 
         switch (this.bulletType) {
             case 'straight':
-                // 弾自体の幅(6px)の半分を引いて、見た目上の中心を合わせる
                 game.entities.push(new EnemyBullet(bx - 3, by, 0, 4));
                 break;
 
-            case 'triple':
-                // 3連弾も同様に中心を補正
-                game.entities.push(new EnemyBullet(bx - 3, by, -1.5, 3));
-                game.entities.push(new EnemyBullet(bx - 3, by, 0, 3));
-                game.entities.push(new EnemyBullet(bx - 3, by, 1.5, 3));
+            case 'triple': {
+                const tripleSpread = 0.3; // 弾の広がり
+                const tripleSpeed = 3;    // 弾の速さ
+                [baseAngle - tripleSpread, baseAngle, baseAngle + tripleSpread].forEach(angle => {
+                    game.entities.push(new EnemyBullet(
+                        bx - 3, by, 
+                        Math.cos(angle) * tripleSpeed, 
+                        Math.sin(angle) * tripleSpeed
+                    ));
+                });
                 break;
+            }
 
             case 'aim':
-            default:
-                const dx = (game.player.x + 16) - bx;
-                const dy = (game.player.y + 16) - by;
-                const angle = Math.atan2(dy, dx);
-                const speed = 4;
-                // 自機狙い弾
-                game.entities.push(new EnemyBullet(bx - 3, by, Math.cos(angle) * speed, Math.sin(angle) * speed));
+            default: {
+                const aimSpeed = 4;
+                game.entities.push(new EnemyBullet(
+                    bx - 3, by, 
+                    Math.cos(baseAngle) * aimSpeed, 
+                    Math.sin(baseAngle) * aimSpeed
+                ));
                 break;
+            }
         }
     }
     draw(ctx) {
@@ -392,6 +416,7 @@ class Game {
         this.frames = 0;
         this.isCleared = false; // 追加
         this.clearTimer = 0;    // 追加
+        this.audio.resetBGM(); // ボリュームと再生位置を戻す
         if (this.enemyManager) {
             this.enemyManager.reset(); // ← ここを this.enemyManager.reset() にするとより安全です
         }
@@ -457,7 +482,12 @@ class Game {
 
     update() {
         this.starfield.update();
-        
+
+// スペースキーでもスタートできるように (isRunningがfalseの時に判定)
+        if (!this.isRunning && this.input.isPressed('Space')) {
+            this.start();
+        }
+                
         if (this.isRunning && this.player.alive) { // プレイヤーが生きている時だけ動かす
             this.player.update(this.input, this.width, this.height);
             if (this.enemyManager) this.enemyManager.update(this.frames, this);
@@ -467,7 +497,7 @@ class Game {
                 const enemies = this.entities.filter(e => e instanceof Enemy && e.active);
                 if (enemies.length === 0) {
                     this.isCleared = true;
-                    // BGMを止めるなどの演出を入れてもOK
+                    this.audio.fadeOutBGM(3000); // 3秒かけてフェードアウト
                 }
             }
             if (this.input.isPressed('KeyZ') && this.frames % 10 === 0) {
