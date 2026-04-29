@@ -1,8 +1,22 @@
 [
-  { "frame": 60,  "type": "straight", "x": 50 },
-  { "frame": 120, "type": "straight", "x": 270 },
-  { "frame": 180, "type": "sine",     "x": 160, "amplitude": 60 },
-  { "frame": 300, "type": "straight", "x": 100 },
-  { "frame": 450, "type": "sine",     "x": 80,  "amplitude": 40 },
-  { "frame": 450, "type": "sine",     "x": 240, "amplitude": 40 }
+  { "frame": 60,  "x": 40,  "type": "normal", "bulletType": "straight" },
+  { "frame": 120, "x": 240, "type": "normal", "bulletType": "straight" },
+  { "frame": 180, "x": 140, "type": "normal", "bulletType": "straight" },
+  
+  { "frame": 300, "x": 80,  "type": "sine",   "bulletType": "aim", "amplitude": 60 },
+  { "frame": 360, "x": 200, "type": "sine",   "bulletType": "aim", "amplitude": 60 },
+  
+  { "frame": 500, "x": 50,  "type": "normal", "bulletType": "triple" },
+  { "frame": 500, "x": 230, "type": "normal", "bulletType": "triple" },
+  
+  { "frame": 700, "x": 140, "type": "sine",   "bulletType": "aim", "amplitude": 80 },
+  { "frame": 800, "x": 20,  "type": "sine",   "bulletType": "straight", "amplitude": 100 },
+  { "frame": 800, "x": 260, "type": "sine",   "bulletType": "straight", "amplitude": 100 },
+  
+  { "frame": 1000, "x": 100, "type": "normal", "bulletType": "triple" },
+  { "frame": 1050, "x": 140, "type": "normal", "bulletType": "aim" },
+  { "frame": 1100, "x": 180, "type": "normal", "bulletType": "triple" },
+  
+  { "frame": 1300, "x": 140, "type": "sine",   "bulletType": "triple", "amplitude": 40 },
+  { "frame": 1500, "x": 140, "type": "normal", "bulletType": "aim" }
 ]

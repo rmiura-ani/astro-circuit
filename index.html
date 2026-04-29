@@ -78,53 +78,63 @@ class Starfield {
     }
 }
 
-/** 敵の弾クラス */
-class EnemyBullet {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.width = 20;
-        this.height = 20;
-        this.speed = 4; // 敵本体より少し速い
-        this.active = true;
-    }
-    update(game) {
-        this.y += this.speed;
-        if (this.y > 480) this.active = false;
-    }
-    draw(ctx) {
-        ctx.fillStyle = '#F0F'; // 敵の弾はマゼンタ（ピンク）で見やすく
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
-        ctx.fill();
-    }
-}
 
-/** 敵 */
+/** 敵クラス */
 class Enemy {
-    constructor(x, y) {
-        this.x = x; this.y = y;
+    constructor(x, y, bulletType = 'aim') { // デフォルト値を設定
+        this.x = x; this.y = y; this.bulletType = bulletType;
         this.width = 32; this.height = 32;
         this.speed = 2; this.active = true;
-        this.shootTimer = Math.random() * 60; // 発射タイミングをバラけさせる
+        this.shootTimer = Math.random() * 60;
         this.image = new Image();
         this.image.src = 'assets/enemy.jfif';
         this.isLoaded = false;
         this.image.onload = () => this.isLoaded = true;
     }
-    update(game) { // 引数にgameを追加してentitiesにアクセスできるようにする
+
+    update(game) {
         this.y += this.speed;
         if (this.y > 480) this.active = false;
 
-        // 弾の発射（gameオブジェクトがある場合のみ）
         if (this.active && game) {
             this.shootTimer++;
             if (this.shootTimer > 120) {
-                const eb = new EnemyBullet(this.x + this.width / 2, this.y + this.height);
-                game.entities.push(eb); // ここで game.entities に追加
-console.log("SUCCESS: Pushed to game.entities", game.entities.length);
+                this.shoot(game); // 発射関数を呼び出す
                 this.shootTimer = 0;
             }
+        }
+    }
+
+    shoot(game) {
+        // 敵の中心 (x + width/2) を弾のX座標にする
+        const bx = this.x + this.width / 2;
+        
+        // 敵の少し下 (y + height) から弾を出す
+        // もし画像の中央付近から出したい場合は y + this.height/2 に調整してください
+        const by = this.y + this.height;
+
+        switch (this.bulletType) {
+            case 'straight':
+                // 弾自体の幅(6px)の半分を引いて、見た目上の中心を合わせる
+                game.entities.push(new EnemyBullet(bx - 3, by, 0, 4));
+                break;
+
+            case 'triple':
+                // 3連弾も同様に中心を補正
+                game.entities.push(new EnemyBullet(bx - 3, by, -1.5, 3));
+                game.entities.push(new EnemyBullet(bx - 3, by, 0, 3));
+                game.entities.push(new EnemyBullet(bx - 3, by, 1.5, 3));
+                break;
+
+            case 'aim':
+            default:
+                const dx = (game.player.x + 16) - bx;
+                const dy = (game.player.y + 16) - by;
+                const angle = Math.atan2(dy, dx);
+                const speed = 4;
+                // 自機狙い弾
+                game.entities.push(new EnemyBullet(bx - 3, by, Math.cos(angle) * speed, Math.sin(angle) * speed));
+                break;
         }
     }
     draw(ctx) {
@@ -135,10 +145,12 @@ console.log("SUCCESS: Pushed to game.entities", game.entities.length);
 
 /** サインカーブ敵 */
 class SineEnemy extends Enemy {
-    constructor(x, y, phase) {
-        super(x, y);
-        this.baseX = x; this.phase = phase;
-        this.amplitude = 50; this.frequency = 0.05;
+    constructor(x, y, phase, bulletType) {
+        super(x, y, bulletType); // 親のコンストラクタへ渡す
+        this.baseX = x;
+        this.phase = phase;
+        this.amplitude = 50;
+        this.frequency = 0.05;
     }
     update(game) {
         super.update(game);
@@ -147,6 +159,31 @@ class SineEnemy extends Enemy {
     }
 }
 
+class EnemyBullet {
+    constructor(x, y, vx, vy) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx; // 横方向の速度
+        this.vy = vy; // 縦方向の速度
+        this.width = 6;
+        this.height = 6;
+        this.active = true;
+    }
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        // 画面外に出たら消す
+        if (this.y > 480 || this.y < -50 || this.x > 320 || this.x < -50) {
+            this.active = false;
+        }
+    }
+    draw(ctx) {
+        ctx.fillStyle = '#F0F';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
 
 /** 自機 */
 class Player {
@@ -242,12 +279,26 @@ class Particle {
 
 /** シナリオ管理 */
 class EnemyManager {
-    constructor(scenario) { this.scenario = scenario; this.currentIndex = 0; }
+    constructor(scenario) { 
+        this.scenario = scenario; 
+        this.currentIndex = 0; 
+    }
+    
     update(frame, game) {
         while (this.currentIndex < this.scenario.length && this.scenario[this.currentIndex].frame === frame) {
             const data = this.scenario[this.currentIndex];
-            let enemy = (data.type === 'sine') ? new SineEnemy(data.x, -32, 0) : new Enemy(data.x, -32);
+            
+            let enemy;
+            if (data.type === 'sine') {
+                // x, y, phase, bulletType の順
+                enemy = new SineEnemy(data.x, -32, 0, data.bulletType);
+            } else {
+                // x, y, bulletType の順
+                enemy = new Enemy(data.x, -32, data.bulletType);
+            }
+
             if (data.amplitude) enemy.amplitude = data.amplitude;
+
             game.entities.push(enemy);
             this.currentIndex++;
         }
@@ -341,7 +392,7 @@ class Game {
         const enemies = this.entities.filter(e => e instanceof Enemy && e.active);
         const eBullets = this.entities.filter(e => e instanceof EnemyBullet && e.active); 
 
-        // ① 自機の弾 vs 敵
+        // ① 自機の弾 vs 敵 (ここは変更なし。敵への攻撃は当たりやすく)
         bullets.forEach(b => {
             enemies.forEach(e => {
                 if (b.x < e.x + e.width && b.x + b.width > e.x && b.y < e.y + e.height && b.y + b.height > e.y) {
@@ -353,22 +404,37 @@ class Game {
 
         // ゲームオーバー判定（自機が生きている時のみ）
         if (this.isRunning && this.player.alive) {
-            // ② 敵の弾 vs 自機
+            
+            // --- ここから修正：自機の小さな当たり判定（コア）を計算 ---
+            const coreSize = 8; // コア（判定）の大きさ(px)
+            const playerCenterX = this.player.x + this.player.width / 2;
+            const playerCenterY = this.player.y + this.player.height / 2;
+            
+            // 自機のコア判定の四隅の座標
+            const pCore = {
+                left: playerCenterX - coreSize / 2,
+                right: playerCenterX + coreSize / 2,
+                top: playerCenterY - coreSize / 2,
+                bottom: playerCenterY + coreSize / 2
+            };
+            // ------------------------------------------------------
+
+            // ② 敵の弾 vs 自機 (新しい当たり判定を使用)
             eBullets.forEach(eb => {
-                if (eb.x < this.player.x + this.player.width &&
-                    eb.x + eb.width > this.player.x &&
-                    eb.y < this.player.y + this.player.height &&
-                    eb.y + eb.height > this.player.y) {
+                if (eb.x < pCore.right &&
+                    eb.x + eb.width > pCore.left &&
+                    eb.y < pCore.bottom &&
+                    eb.y + eb.height > pCore.top) {
                     this.gameOver();
                 }
             });
 
-            // ③ 敵本体 vs 自機
+            // ③ 敵本体 vs 自機 (新しい当たり判定を使用)
             enemies.forEach(e => {
-                if (e.x < this.player.x + this.player.width &&
-                    e.x + e.width > this.player.x &&
-                    e.y < this.player.y + this.player.height &&
-                    e.y + e.height > this.player.y) {
+                if (e.x < pCore.right &&
+                    e.x + e.width > pCore.left &&
+                    e.y < pCore.bottom &&
+                    e.y + e.height > pCore.top) {
                     this.gameOver();
                 }
             });
