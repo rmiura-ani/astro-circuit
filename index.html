@@ -282,26 +282,38 @@ class EnemyManager {
     constructor(scenario) { 
         this.scenario = scenario; 
         this.currentIndex = 0; 
+        this.isFinished = false; 
     }
     
     update(frame, game) {
+        // 全員出し切ったら終了フラグを立てる
+        if (this.currentIndex >= this.scenario.length) {
+            this.isFinished = true;
+            return;
+        }
+
+        // 指定のフレームになったら敵を生成
         while (this.currentIndex < this.scenario.length && this.scenario[this.currentIndex].frame === frame) {
             const data = this.scenario[this.currentIndex];
+            const bType = data.bulletType || 'straight';
             
             let enemy;
             if (data.type === 'sine') {
-                // x, y, phase, bulletType の順
-                enemy = new SineEnemy(data.x, -32, 0, data.bulletType);
+                enemy = new SineEnemy(data.x, -32, 0, bType);
+                if (data.amplitude) enemy.amplitude = data.amplitude;
             } else {
-                // x, y, bulletType の順
-                enemy = new Enemy(data.x, -32, data.bulletType);
+                enemy = new Enemy(data.x, -32, bType);
             }
-
-            if (data.amplitude) enemy.amplitude = data.amplitude;
 
             game.entities.push(enemy);
             this.currentIndex++;
         }
+    }
+
+    // リセット時に呼び出す用
+    reset() {
+        this.currentIndex = 0;
+        this.isFinished = false;
     }
 }
 
@@ -321,6 +333,8 @@ class Game {
         this.frames = 0;
         this.isLoaded = false;
         this.enemyManager = null;
+        this.isCleared = false;
+        this.clearTimer = 0;
     }
 
     async init() {
@@ -376,14 +390,14 @@ class Game {
     reset() {
         this.entities = []; 
         this.frames = 0;
-        if (this.enemyManager) this.enemyManager.currentIndex = 0;
-        
-        // プレイヤーの復活処理
-        this.player.alive = true; // 生存フラグを戻す
-        this.player.x = this.width / 2 - 16; // 位置を中央に戻す
+        this.isCleared = false; // 追加
+        this.clearTimer = 0;    // 追加
+        if (this.enemyManager) {
+            this.enemyManager.reset(); // ← ここを this.enemyManager.reset() にするとより安全です
+        }
+        this.player.alive = true;
+        this.player.x = this.width / 2 - 16;
         this.player.y = this.height - 60;
-        
-        console.log("Player reset: alive =", this.player.alive);
     }
 
     checkCollisions() {
@@ -448,6 +462,14 @@ class Game {
             this.player.update(this.input, this.width, this.height);
             if (this.enemyManager) this.enemyManager.update(this.frames, this);
 
+            // シナリオが終了し、画面内に敵がいなくなったらクリア！
+            if (this.enemyManager.isFinished && !this.isCleared) {
+                const enemies = this.entities.filter(e => e instanceof Enemy && e.active);
+                if (enemies.length === 0) {
+                    this.isCleared = true;
+                    // BGMを止めるなどの演出を入れてもOK
+                }
+            }
             if (this.input.isPressed('KeyZ') && this.frames % 10 === 0) {
                 this.entities.push(new Bullet(this.player.x + this.player.width/2 - 2, this.player.y));
                 this.audio.playShot();
@@ -455,6 +477,10 @@ class Game {
             this.checkCollisions();
             this.frames++;
         }
+        if (this.isCleared) {
+            this.clearTimer++;
+        }
+
         // 全エンティティの更新
         const currentEntities = [...this.entities]; 
             currentEntities.forEach(e => {
@@ -468,6 +494,28 @@ class Game {
         this.starfield.draw(this.ctx);
         this.entities.forEach(e => e.draw(this.ctx));
         this.player.draw(this.ctx);
+
+        // --- ステージクリア表示 ---
+        if (this.isCleared) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            this.ctx.fillRect(0, this.height / 2 - 40, this.width, 80);
+
+            this.ctx.font = 'bold 24px "Courier New"';
+            this.ctx.fillStyle = '#0FF';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('STAGE 1 CLEAR', this.width / 2, this.height / 2 + 8);
+            
+            // 5秒（300フレーム）経ったらリスタート画面へ
+            if (this.clearTimer > 300) {
+                this.isRunning = false;
+                const startScreen = document.getElementById('start-screen');
+                startScreen.style.display = 'flex';
+                startScreen.querySelector('p').innerText = "CONGRATULATIONS!\nClick to Play Again";
+                this.isCleared = false;
+                this.clearTimer = 0;
+                this.reset();
+            }
+        }
     }
 
     loop() {
