@@ -2,21 +2,37 @@
 <html lang="ja">
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ASTRO CIRCUIT</title>
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="PROJECT: VOID-CIRCUIT">
+    <meta name="twitter:description" content="AIとプロデューサーが創り出した、虚無の回路を駆け抜けるSTG。">
+    <meta name="twitter:image" content="https://void-circuit.ani-net.com/assets/player.jfif">
+    <title>PROJECT: VOID-CIRCUI</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         body {
             margin: 0; background-color: #111; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; 
             font-family: 'Press Start 2P', cursive;
         }
-        canvas { 
-                    background-color: #000; 
-                    border: 2px solid #555; 
-                    max-width: 95vw;  /* 画面幅の95%を上限にする */
-                    max-height: 85vh; /* 画面高さの85%を上限にする */
-                    object-fit: contain; /* アスペクト比を維持 */
-                }
-        #game-container { position: relative; }
+        *:focus {
+            outline: none !important;
+        }
+        button {
+            outline: none;
+            -webkit-tap-highlight-color: transparent; /* スマホでのタップ時の色も消す */
+        }
+        canvas {
+            display: block;
+            border: none;
+            outline: none;
+        }
+        #game-container {
+            position: relative;
+            width: 320px;
+            height: 480px;
+            margin: 0 auto;
+            background-color: #000;
+            overflow: hidden; 
+        }
         #start-screen {
             position: absolute;
             top: 0;
@@ -36,10 +52,11 @@
         /* タイトルのスタイル */
         #start-screen h2 {
             font-family: 'Press Start 2P', cursive;
-            font-size: 24px;
+            font-size: 18px; /* 24pxから少し小さくして密度を上げる */
+            line-height: 1.5;
             color: #0FF;
             text-shadow: 3px 3px #F0F;
-            margin: 0; /* 余計な隙間を消す */
+            margin: 0;
         }
 
         /* メッセージ（Loading... / GAME OVER）のスタイル */
@@ -50,15 +67,113 @@
             margin-top: 20px; /* タイトルとの間に少し隙間を作る */
             line-height: 1.8;  /* 2行になった時の行間を広げる */
         }
-    </style>
+        #share-btn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 10px;
+            color: #000;
+            background-color: #FFF;
+            border: 4px solid #0FF;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        #share-btn:hover {
+            background-color: #0FF;
+            transform: scale(1.1);
+        }
+
+        #credit-screen {
+            position: absolute;
+            top: 480px; 
+            left: 0;
+            width: 100%;
+            text-align: center;
+            color: #fff;
+            background: transparent;
+            z-index: 5;
+            display: none; /* JSで.scrollingが付くまで隠す */
+        }
+        #credit-screen h3 {
+            color: #FF0;
+            font-size: 10px;
+            margin-bottom: 30px;
+        }
+
+        #credit-screen p {
+            font-size: 10px;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+
+        /* スクロールアニメーション */
+        @keyframes scrollUp {
+            0% { transform: translateY(0); }
+            80% { transform: translateY(-180%); } /* 80%の地点で最後まで出し切る */
+            100% { transform: translateY(-180%); } /* 残りの20%の時間は静止させる */
+        }
+        .scrolling {
+            animation: scrollUp 25s linear forwards; /* infiniteをforwardsに変えると最後で止まります */
+        }
+</style>
 </head>
 <body>
 
 <div id="game-container">
     <canvas id="gameCanvas" width="320" height="480"></canvas>
+    
     <div id="start-screen">
-        <h2>ASTRO CIRCUIT</h2>
-        <p>Loading Assets...</p>
+        <div id="title-content">
+            <h2>PROJECT:<br>VOID-CIRCUIT</h2>
+            <p id="message">Loading Assets...</p>
+            <button id="share-btn" style="display: none;" onclick="event.stopPropagation();">SHARE ON X</button>
+        </div>
+
+        <div id="credit-screen" style="display: none;">
+            <div class="credit-section">
+                <h3>--- PROJECT STAFF ---</h3>
+                <p><span class="label">PRODUCED BY</span><br>あに。部長</p>
+                <p><span class="label">AI COLLABORATOR</span><br>Google Gemini 3 Flash</p>
+            </div>
+        </div>
+
+        <div id="credit-screen" style="display: none;">
+            <div class="credit-section">
+                <h3>--- PROJECT STAFF ---</h3>
+                <p><span class="label">PRODUCED BY</span><br>rmiura-ani</p>
+                <p>
+                    <span class="label">AI COLLABORATOR</span><br>
+                    Google Gemini 3 Flash<br>
+                    (Logic & Visual Generation)
+                </p>
+            </div>
+
+            <div class="credit-section">
+                <h3>--- CREATIVE ASSETS ---</h3>
+                <p><span class="label">MUSIC & SOUND</span><br>Suno AI</p>
+            </div>
+
+            <div class="credit-section">
+                <h3>--- TECHNOLOGY & OSS ---</h3>
+                <p>
+                    <span class="label">SOURCE CODE</span><br>
+                    Released as Open Source Software<br>
+                    on GitHub (MIT License)
+                </p>
+                <p>
+                    <span class="label">TYPOGRAPHY</span><br>
+                    "Press Start 2P" by CodeMan38<br>
+                    Licensed under SIL OFL
+                </p>
+            </div>
+
+            <div class="credit-section">
+                <p>--- MISSION STATUS ---</p>
+                <p>ALL SYSTEMS GO.</p>
+                <p>THANK YOU FOR PLAYING!</p>
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -437,6 +552,7 @@ class Game {
         this.enemyManager = null;
         this.isCleared = false;
         this.clearTimer = 0;
+        this.isShowingCredits = false;
     }
 
     async init() {
@@ -480,8 +596,29 @@ class Game {
         }
     }
 
+    showCredits() {
+        this.isShowingCredits = true;
+        const title = document.getElementById('title-content');
+        const credits = document.getElementById('credit-screen');
+
+        title.style.display = 'none'; // タイトルを隠す
+        credits.style.display = 'block';
+        credits.classList.remove('scrolling');
+        void credits.offsetWidth;
+        credits.classList.add('scrolling'); // アニメーション開始
+    }
+
     start() {
+        document.getElementById('share-btn').style.display = 'none';
         if (!this.isLoaded) return;
+        
+        // クレジット表示中なら元に戻す
+        this.isShowingCredits = false;
+        document.getElementById('title-content').style.display = 'block';
+        const credits = document.getElementById('credit-screen');
+        credits.style.display = 'none';
+        credits.classList.remove('scrolling');
+
         if (this.isRunning) return;
         
         this.isRunning = true;
@@ -499,6 +636,7 @@ class Game {
         if (!this.isRunning) return; // 二重呼び出し防止
         this.isRunning = false;
         this.player.alive = false; // ← ここで自機を画面から消す！
+        this.isShowingCredits = false; // クレジットフラグも倒しておく
 
         // 音の再生
         if (this.audio.bgm) { 
@@ -515,10 +653,31 @@ class Game {
         // 5秒待機
         setTimeout(() => {
             const startScreen = document.getElementById('start-screen');
+            const shareBtn = document.getElementById('share-btn');
+            const msg = document.getElementById('message');
+            
             startScreen.style.display = 'flex';
-            startScreen.querySelector('p').innerText = "GAME OVER\nClick to Restart";
+            startScreen.querySelector('p').innerText = "MISSION FAILED\n\nRETRY OPERATION?";
+
+            // シェアボタンを表示してイベント登録
+            shareBtn.style.display = 'inline-block';
+            shareBtn.onclick = (e) => {
+                e.stopPropagation(); // 再開を防止
+                this.shareOnX();
+            };
+
             this.reset();
         }, 5000);
+    }
+
+    shareOnX(score) {
+        const text = `PROJECT: VOID-CIRCUIT \nスコア: ${score}\n作戦完了。虚無の回路を突破せよ。\n`;
+        const url = "https://void-circuit.ani-net.com";
+        const hashtags = "VoidCircuit,80年代STG,IndieGame,SunoAI";
+        
+        const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}&hashtags=${encodeURIComponent(hashtags)}`;
+        
+        window.open(xUrl, '_blank');
     }
 
     reset() {
@@ -610,8 +769,8 @@ class Game {
                     this.audio.fadeOutBGM(3000); // 3秒かけてフェードアウト
                 }
             }
-            // Zキー または 画面タッチ で発射
-            const isFiring = this.input.isPressed('KeyZ') || this.input.isTouching;
+            // Zキー、スペースキー または 画面タッチ で発射
+            const isFiring = this.input.isPressed('KeyZ') || this.input.isPressed('Space') || this.input.isTouching;
             if (isFiring && this.frames % 10 === 0) {
                 this.entities.push(new Bullet(this.player.x + this.player.width/2 - 2, this.player.y));
                 this.audio.playShot();
@@ -644,7 +803,7 @@ class Game {
             this.ctx.font = '16px "Press Start 2P"'; // Google Fontsでの名前を指定
             this.ctx.fillStyle = '#0FF';
             this.ctx.textAlign = 'center';
-            this.ctx.fillText('STAGE 1 CLEAR', this.width / 2, this.height / 2 + 8);
+            this.ctx.fillText('MISSION COMPLETE', this.width / 2, this.height / 2);
             
             // 5秒（300フレーム）経ったらリスタート画面へ
             if (this.clearTimer > 300) {
@@ -671,9 +830,23 @@ class Game {
 
 const game = new Game();
 game.init().then(() => {
+    // --- 放置タイマーの設定 ---
+    // 3秒間（3000ミリ秒）何もしなければ showCredits を呼ぶ
+    let idleTimeout = setTimeout(() => {
+        game.showCredits();
+    }, 3000);
+
     document.getElementById('start-screen').addEventListener('click', () => {
+        // --- 割り込み処理 ---
+        // クリックされたら、まだ実行されていないタイマーをキャンセルする
+        clearTimeout(idleTimeout);
+
         const p = document.querySelector('#start-screen p');
-        if (p.innerText.includes("GAME OVER")) p.innerText = "Click to Start";
+        if (p && p.innerText.includes("GAME OVER")) {
+            p.innerText = "Click to Start";
+        }
+
+        // ゲームを開始（内部で credit-screen を非表示にする処理が含まれている前提）
         game.start();
     });
 });
