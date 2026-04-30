@@ -25,6 +25,32 @@
             border: none;
             outline: none;
         }
+        #version-display {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            color: #555; /* 目立ちすぎないグレー */
+            font-family: 'Press Start 2P', cursive;
+            font-size: 6px; /* 小さめでプロっぽく */
+            z-index: 20;
+            pointer-events: none;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            color: #00ffcc; /* サイバーなティールカラー */
+            /* ここで指定のドットフォントを適用 */
+            font-family: 'Press Start 2P', cursive; 
+            font-size: 8px; /* ドットフォントは少し小さめがプロっぽい */
+            line-height: 1.5;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            z-index: 100;
+            text-shadow: 2px 2px #000; /* 文字の視認性を上げる影 */
+        }
         #game-container {
             position: relative;
             width: 320px;
@@ -120,8 +146,14 @@
 <body>
 
 <div id="game-container">
+    <div id="version-display"></div>
     <canvas id="gameCanvas" width="320" height="480"></canvas>
-    
+
+    <div id="ui-layer">
+        <div id="score-display">SCORE: 00000000</div>
+        <div id="highscore-display">HI-SCORE: 00000000</div>
+    </div>
+
     <div id="start-screen">
         <div id="title-content">
             <h2>PROJECT:<br>VOID-CIRCUIT</h2>
@@ -133,14 +165,6 @@
             <div class="credit-section">
                 <h3>--- PROJECT STAFF ---</h3>
                 <p><span class="label">PRODUCED BY</span><br>あに。部長</p>
-                <p><span class="label">AI COLLABORATOR</span><br>Google Gemini 3 Flash</p>
-            </div>
-        </div>
-
-        <div id="credit-screen" style="display: none;">
-            <div class="credit-section">
-                <h3>--- PROJECT STAFF ---</h3>
-                <p><span class="label">PRODUCED BY</span><br>rmiura-ani</p>
                 <p>
                     <span class="label">AI COLLABORATOR</span><br>
                     Google Gemini 3 Flash<br>
@@ -537,6 +561,8 @@ class EnemyManager {
 /** ゲーム本体 */
 class Game {
     constructor() {
+        this.version = "Ver 0.10";
+        
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
         this.width = this.canvas.width; this.height = this.canvas.height;
@@ -553,10 +579,14 @@ class Game {
         this.isCleared = false;
         this.clearTimer = 0;
         this.isShowingCredits = false;
+        this.score = 0;
+        this.highScore = localStorage.getItem('void_circuit_highscore') || 0;
     }
 
     async init() {
         try {
+            document.getElementById('version-display').innerText = this.version;
+
             // シナリオの読み込み
             const res = await fetch('scenario.json');
             const data = await res.json();
@@ -649,6 +679,13 @@ class Game {
         for(let i = 0; i < 60; i++) {
             this.entities.push(new Particle(this.player.x + 16, this.player.y + 16, 'player'));
         }
+    
+        // ハイスコアを保存
+        const isNewRecord = this.score >= this.highScore && this.score > 0;
+        if (isNewRecord) {
+                this.highScore = this.score;
+            localStorage.setItem('void_circuit_highscore', this.highScore);
+        }
 
         // 5秒待機
         setTimeout(() => {
@@ -656,8 +693,20 @@ class Game {
             const shareBtn = document.getElementById('share-btn');
             const msg = document.getElementById('message');
             
-            startScreen.style.display = 'flex';
-            startScreen.querySelector('p').innerText = "MISSION FAILED\n\nRETRY OPERATION?";
+            // 通常の敗北メッセージ
+            let statusMsg = `<span style="color: #ff004d;"GAME OVER</span>`;
+            
+            // ハイスコア更新時のみ、メッセージを上書きまたは追加
+            let hiScoreMsg = isNewRecord 
+                ? `<br><span style="color: #ffff00; font-size: 1.2em; animation: blink 0.5s infinite;">★ NEW HI-SCORE !! ★</span>` 
+                : "";
+
+            startScreen.querySelector('p').innerHTML = `
+                ${statusMsg}${hiScoreMsg}<br><br>
+                RETRY OPERATION?
+            `;
+
+            document.getElementById('start-screen').style.display = 'flex';
 
             // シェアボタンを表示してイベント登録
             shareBtn.style.display = 'inline-block';
@@ -670,14 +719,19 @@ class Game {
         }, 5000);
     }
 
-    shareOnX(score) {
-        const text = `PROJECT: VOID-CIRCUIT \nスコア: ${score}\n作戦完了。虚無の回路を突破せよ。\n`;
-        const url = "https://void-circuit.ani-net.com";
-        const hashtags = "VoidCircuit,80年代STG,IndieGame,SunoAI";
+    shareOnX() {
+        const tweetText = `PROJECT: VOID-CIRCUIT (${this.version})
+スコア: ${this.score}
+作戦完了。虚無の回路を突破せよ。
+
+https://void-circuit.ani-net.com
+
+#VoidCircuit #80年代STG #IndieGame #SunoAI`;
+
+        // 改行コードも含めてエンコード
+        const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
         
-        const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}&hashtags=${encodeURIComponent(hashtags)}`;
-        
-        window.open(xUrl, '_blank');
+        window.open(url, '_blank');
     }
 
     reset() {
@@ -706,6 +760,7 @@ class Game {
                 if (b.x < e.x + e.width && b.x + b.width > e.x && b.y < e.y + e.height && b.y + b.height > e.y) {
                     b.active = false; e.active = false;
                     for(let i=0; i<8; i++) this.entities.push(new Particle(e.x + 16, e.y + 16, 'enemy'));
+                    this.score += 100;
                 }
             });
         });
@@ -769,12 +824,17 @@ class Game {
                     this.audio.fadeOutBGM(3000); // 3秒かけてフェードアウト
                 }
             }
+            // 生きているだけで加点
+            this.score += 20;
+
             // Zキー、スペースキー または 画面タッチ で発射
             const isFiring = this.input.isPressed('KeyZ') || this.input.isPressed('Space') || this.input.isTouching;
             if (isFiring && this.frames % 10 === 0) {
                 this.entities.push(new Bullet(this.player.x + this.player.width/2 - 2, this.player.y));
                 this.audio.playShot();
-            }            this.checkCollisions();
+                this.score -= 10;   // ショットで減点
+            }            
+            this.checkCollisions();
             this.frames++;
         }
         if (this.isCleared) {
@@ -787,6 +847,10 @@ class Game {
                 if (e.update) e.update(this);
             });
         this.entities = this.entities.filter(e => e.active);
+
+        // SCOREの更新
+        document.getElementById('score-display').innerText = `SCORE: ${this.score.toString().padStart(8, '0')}`;
+        document.getElementById('highscore-display').innerText = `HI-SCORE: ${this.highScore.toString().padStart(8, '0')}`;
     }
 
     draw() {
