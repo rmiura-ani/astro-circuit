@@ -12,18 +12,35 @@ body {
 }
 
 #game-container {
+    container-type: size;
+    
     position: relative;
-    width: 320px;
-    height: 480px;
+    width: auto; 
+    height: 80vh;
+    aspect-ratio: 2 / 3;
+
     background: #000;
     box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+    overflow: hidden;
+    
+    margin: auto; 
     overflow: hidden;
 }
 
 canvas {
-    display: block;
+    /* 画面の縦横どちらかのアスペクト比を維持して最大化 */
     width: 100%;
     height: 100%;
+    display: block;
+
+    /* ドット絵がぼやけないようにする魔法のプロパティ */
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+
+    /* 中央寄せ */
+    display: block;
+    margin: 0 auto;
+
     touch-action: none;
 }
 
@@ -33,6 +50,7 @@ canvas {
     top: 0;
     left: 0;
     width: 100%;
+    height: 100%;
     padding: 15px 10px;
     box-sizing: border-box;
     display: flex;
@@ -45,7 +63,7 @@ canvas {
 #score-display, 
 #hi-score-display {
     font-family: 'Press Start 2P', cursive;
-    font-size: 8px; /* Canvasの時と同じサイズ */
+    font-size: 2.5cqw;
     color: #FFFFFF;
     text-shadow: 2px 2px 0px #000; /* 文字を読みやすくするための縁取り */
     line-height: 1;
@@ -101,22 +119,13 @@ canvas {
 /* クレジット（スタッフロール）演出 */
 #credit-screen {
     display: none;
+    position: absolute;
     background: #000;
     font-family: 'DotGothic16', sans-serif;
-    padding: 20px;
     box-sizing: border-box;
     text-align: left;
     width: 100%;
     height: 100%;
-}
-
-.scrolling {
-    animation: credit-scroll 45s linear forwards;
-}
-
-@keyframes credit-scroll {
-    0% { transform: translateY(100%); }
-    100% { transform: translateY(-250%); }
 }
 
 #credit-screen h2 {
@@ -126,13 +135,25 @@ canvas {
     text-align: center;
 }
 
-.credit-section {
+.credit-content {
+    width: 100%;
+    padding: 20px;
+    box-sizing: border-box;
     margin-bottom: 25px;
+}
+
+.scrolling .credit-content {
+    animation: credit-scroll 45s linear forwards;
+}
+
+@keyframes credit-scroll {
+    0% { transform: translateY(80vh); }
+    100% { transform: translateY(-100%); }
 }
 
 .credit-label {
     color: #888;
-    font-size: 12px;
+    font-size: 14px;
     margin-bottom: 5px;
 }
 

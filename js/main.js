@@ -7,7 +7,7 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
-        this.version = "0.19";
+        this.version = "0.20";
 
         // GitHub上の資産ベースURL
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
@@ -153,17 +153,17 @@ class Game {
     showCredits() {
         this.isShowingCredits = true;
         document.getElementById('title-content').style.display = 'none';
-        const credits = document.getElementById('credit-screen');
-        credits.style.display = 'block';
-        credits.classList.add('scrolling');
+        const screen = document.getElementById('credit-screen');
+        screen.style.display = 'block';
+        screen.classList.add('scrolling');
     }
 
     // タイトルに戻る
     backToTitle() {
         this.isShowingCredits = false;
-        const credits = document.getElementById('credit-screen');
-        credits.style.display = 'none';
-        credits.classList.remove('scrolling');
+        const screen = document.getElementById('credit-screen');
+        screen.style.display = 'none';
+        screen.classList.remove('scrolling');
         document.getElementById('title-content').style.display = 'block';
         this.startIdleTimer();
     }
@@ -346,26 +346,22 @@ class Game {
         }
     }
 
-    updateScoreUI() {
-        const MAX_SCORE = 99999990;
-        this.score = this.score > MAX_SCORE ? MAX_SCORE : this.score;
-        
-        const scoreEl = document.getElementById('score-display');
-        const hiScoreEl = document.getElementById('hi-score-display');
+    resize() {
+        const canvas = this.ctx.canvas;
+        const windowRatio = window.innerWidth / window.innerHeight;
+        const gameRatio = this.width / this.height; // 320 / 480 = 0.66...
 
-        if (scoreEl) {
-            scoreEl.innerText = `SCORE: ${this.score.toString().padStart(8, '0')}`;
-            if (this.score >= MAX_SCORE) {
-                scoreEl.classList.add('counter-stop');
-            } else {
-                scoreEl.classList.remove('counter-stop');
-            }
-        }        
-        if (hiScoreEl) {
-            hiScoreEl.innerText = `HI-SCORE: ${this.highScore.toString().padStart(8, '0')}`;
+        if (windowRatio < gameRatio) {
+            // 画面が縦長すぎる場合（スマホなど）：幅を100%に
+            canvas.style.width = '100vw';
+            canvas.style.height = 'auto';
+        } else {
+            // 画面が横長すぎる場合（タブレット・PC）：高さを100%に
+            canvas.style.height = '100vh';
+            canvas.style.width = 'auto';
         }
     }
-
+    
     endSession(msg) {
         this.isRunning = false;
         this.isShowingCredits = false;
@@ -403,6 +399,26 @@ https://void-circuit.ani-net.com
             window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
         };
         this.startIdleTimer();
+    }
+
+    updateScoreUI() {
+        const MAX_SCORE = 99999990;
+        this.score = this.score > MAX_SCORE ? MAX_SCORE : this.score;
+        
+        const scoreEl = document.getElementById('score-display');
+        const hiScoreEl = document.getElementById('hi-score-display');
+
+        if (scoreEl) {
+            scoreEl.innerText = `SCORE: ${this.score.toString().padStart(8, '0')}`;
+            if (this.score >= MAX_SCORE) {
+                scoreEl.classList.add('counter-stop');
+            } else {
+                scoreEl.classList.remove('counter-stop');
+            }
+        }        
+        if (hiScoreEl) {
+            hiScoreEl.innerText = `HI-SCORE: ${this.highScore.toString().padStart(8, '0')}`;
+        }
     }
 
     loop() {
