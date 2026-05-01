@@ -700,17 +700,10 @@ class Game {
 
             // シナリオの読み込み
             let scenarioData;
-            try {
-                // ローカルのシナリオファイルがあれば、それを優先
-                const localRes = await fetch('./scenario.json');
-                if (!localRes.ok) throw new Error("Local file not found");
-                log.console("OK")
-                scenarioData = await localRes.json();
-            } catch (err) {
-                // ローカルにファイルがない場合はリモートへフォールバック
-                const remoteRes = await fetch(ASSET_BASE + 'scenario.json');
-                scenarioData = await remoteRes.json();
-            }
+            const isLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+            const path = isLocal ? './scenario.json' : ASSET_BASE + 'scenario.json';
+            const res = await fetch(path);
+            scenarioData = await res.json();
             this.enemyManager = new EnemyManager(scenarioData);
 
             // 画像のプリロード（自機と敵）
