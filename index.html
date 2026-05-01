@@ -7,6 +7,7 @@
     <meta name="twitter:description" content="AIとプロデューサーが創り出した、虚無の回路を駆け抜けるSTG。">
     <meta name="twitter:image" content="https://void-circuit-assets.ani-net.com/player.jfif">
     <title>PROJECT: VOID-CIRCUIT</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🕹️</text></svg>">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
     <style>
@@ -515,10 +516,41 @@ class Player {
         if (input.isTouching && input.touchX !== null) {
             const targetX = input.touchX - this.width / 2;
             const targetY = input.touchY - this.height / 2;
-            
-            // 遊び（デッドゾーン）を作ってガタつき防止
-            if (Math.abs(this.x - targetX) > 2) this.x += (targetX - this.x) * 0.2;
-            if (Math.abs(this.y - targetY) > 2) this.y += (targetY - this.y) * 0.2;
+
+            // 1. 次のフレームでの移動量を計算 (現在のイージング)
+            let vx = (targetX - this.x) * 0.2;
+            let vy = (targetY - this.y) * 0.2;
+
+            // 2. 座標を更新
+            this.x += vx;
+            this.y += vy;
+
+            // 3. 画面端の判定とバウンド処理 (320x480想定)
+            // --- 画面端の判定しきい値を「半身」に設定 ---
+            const minX = -this.width / 2;
+            const maxX = 320 - this.width / 2;
+            const minY = -this.height / 2;
+            const maxY = 480 - this.height / 2;
+
+            const bounce = 0.6; // 跳ね返り強度（お好みで）
+
+            // 横方向の判定
+            if (this.x < minX) {
+                this.x = minX;
+                this.x += Math.abs(vx) * bounce; 
+            } else if (this.x > maxX) {
+                this.x = maxX;
+                this.x -= Math.abs(vx) * bounce;
+            }
+
+            // 縦方向の判定
+            if (this.y < minY) {
+                this.y = minY;
+                this.y += Math.abs(vy) * bounce;
+            } else if (this.y > maxY) {
+                this.y = maxY;
+                this.y -= Math.abs(vy) * bounce;
+            }
         }
     }
     draw(ctx) {
@@ -638,7 +670,7 @@ class EnemyManager {
 /** ゲーム本体 */
 class Game {
     constructor() {
-        this.version = "Ver 0.10";
+        this.version = "Ver 0.15";
         
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
@@ -663,15 +695,23 @@ class Game {
 
     async init() {
         try {
+            // 画面にバージョン表記
             document.getElementById('version-display').innerText = this.version;
 
             // シナリオの読み込み
-            const res = await fetch(ASSET_BASE + 'scenario.json');
-            const data = await res.json();
-            this.enemyManager = new EnemyManager(data);
-
-            // 先にオーディオの器を作る
-            this.audio.initAudio();
+            let scenarioData;
+            try {
+                // ローカルのシナリオファイルがあれば、それを優先
+                const localRes = await fetch('./scenario.json');
+                if (!localRes.ok) throw new Error("Local file not found");
+                log.console("OK")
+                scenarioData = await localRes.json();
+            } catch (err) {
+                // ローカルにファイルがない場合はリモートへフォールバック
+                const remoteRes = await fetch(ASSET_BASE + 'scenario.json');
+                scenarioData = await remoteRes.json();
+            }
+            this.enemyManager = new EnemyManager(scenarioData);
 
             // 画像のプリロード（自機と敵）
             const loadImage = (src) => {
@@ -684,6 +724,7 @@ class Game {
             };
 
             // BGMの読み込み完了を待つPromiseを作成
+            this.audio.initAudio();
             const loadAudio = (audio) => {
                 return new Promise((resolve) => {
                     // すでに読み込みが終わっている可能性も考慮
@@ -700,9 +741,6 @@ class Game {
                     setTimeout(resolve, 5000);
                 });
             };
-
-            // --- ここでSEのリストを抽出して待機させる ---
-//            const sePromises = Object.values(this.audio.sounds).map(se => loadAudio(se));
             
             // 画像と一緒にBGMも待つ
             await Promise.all([
