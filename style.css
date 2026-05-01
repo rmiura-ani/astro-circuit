@@ -1,0 +1,169 @@
+/* 全体レイアウト */
+body {
+    margin: 0;
+    background-color: #111;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    color: #fff;
+    font-family: 'Press Start 2P', cursive;
+}
+
+#game-container {
+    position: relative;
+    width: 320px;
+    height: 480px;
+    background: #000;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+    overflow: hidden;
+}
+
+canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+}
+
+/* UIレイヤー：Canvasの真上に配置 */
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 15px 10px;
+    box-sizing: border-box;
+    display: flex;
+    justify-content: space-between;
+    
+    pointer-events: none; 
+    z-index: 100;
+}
+
+#score-display, 
+#hi-score-display {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 8px; /* Canvasの時と同じサイズ */
+    color: #FFFFFF;
+    text-shadow: 2px 2px 0px #000; /* 文字を読みやすくするための縁取り */
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.counter-stop {
+    color: #FFD700 !important;
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.8); /* ほんのり光らせる */
+}
+
+/* 画面共通レイアウト（スタート、クレジット等） */
+.screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0,0,0,0.85);
+    z-index: 10;
+    text-align: center;
+    cursor: pointer;
+}
+
+/* タイトル・スタート画面 */
+#start-screen p {
+    font-size: 12px;
+    line-height: 1.4;
+    margin-top: 20px;
+}
+
+#start-screen h1 {
+    font-size: 18px; /* 24pxから少し小さくして密度を上げる */
+    line-height: 1.5;
+    color: #0FF;
+    text-shadow: 3px 3px #F0F;
+    margin: 0;
+}
+
+.blink {
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+/* クレジット（スタッフロール）演出 */
+#credit-screen {
+    display: none;
+    background: #000;
+    font-family: 'DotGothic16', sans-serif;
+    padding: 20px;
+    box-sizing: border-box;
+    text-align: left;
+    width: 100%;
+    height: 100%;
+}
+
+.scrolling {
+    animation: credit-scroll 45s linear forwards;
+}
+
+@keyframes credit-scroll {
+    0% { transform: translateY(100%); }
+    100% { transform: translateY(-250%); }
+}
+
+#credit-screen h2 {
+    color: #0FF;
+    font-size: 18px;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.credit-section {
+    margin-bottom: 25px;
+}
+
+.credit-label {
+    color: #888;
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+
+.credit-name {
+    color: #FFF;
+    font-size: 16px;
+}
+
+/* UI・その他 */
+#version-display {
+    position: absolute;
+    bottom: 5px;
+    right: 10px;
+    font-size: 8px;
+    color: #444;
+}
+
+#share-btn {
+    display: none;
+    margin-top: 20px;
+    padding: 10px 25px;
+    background: #1DA1F2;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-family: 'DotGothic16', sans-serif;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+#share-btn:hover {
+    transform: scale(1.1);
+}
