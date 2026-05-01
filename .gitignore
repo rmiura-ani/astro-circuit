@@ -1,3 +1,10 @@
+# GAME assets (Hosted on assets.ani-net.com)
+*.mp3
+*.wav
+*.ogg
+*.jfif
+scenario.json
+
 # Windows特有のメタデータファイルを無視
 *:Zone.Identifier
 

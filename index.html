@@ -5,7 +5,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="PROJECT: VOID-CIRCUIT">
     <meta name="twitter:description" content="AIとプロデューサーが創り出した、虚無の回路を駆け抜けるSTG。">
-    <meta name="twitter:image" content="https://void-circuit.ani-net.com/assets/player.jfif">
+    <meta name="twitter:image" content="https://void-circuit-assets.ani-net.com/player.jfif">
     <title>PROJECT: VOID-CIRCUI</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
@@ -202,6 +202,9 @@
 </div>
 
 <script>
+/** 定数定義（アセットの配信元） */
+const ASSET_BASE = "https://void-circuit-assets.ani-net.com/";
+
 /** 入力管理 */
 class InputManager {
     constructor() {
@@ -239,11 +242,17 @@ class InputManager {
 /** オーディオ管理 */
 class AudioManager {
     constructor() {
-        this.bgm = new Audio('assets/bgm-stage1.mp3');
+        this.bgmUrl = ASSET_BASE + "bgm-stage1.mp3";
+        this.shotSoundPath =  ASSET_BASE + "shot.wav";
+        this.explosionSoundPath = ASSET_BASE + "explosion.wav";
+    }
+    // BGM初期化メソッド
+    initAudio() {
+        this.bgm = new Audio();
+        this.bgm.crossOrigin = "anonymous"; 
+        this.bgm.src = this.bgmUrl;
         this.bgm.loop = true;
         this.bgm.volume = 0.4;
-        this.shotSoundPath = 'assets/shot.wav';
-        this.explosionSoundPath = 'assets/explosion.wav';
     }
     playBGM() { this.bgm.play().catch(e => console.log("BGM Error", e)); }
     fadeOutBGM(duration = 2000) {
@@ -265,12 +274,16 @@ class AudioManager {
         this.bgm.volume = 0.4;
     }
     playShot() {
-        const sound = new Audio(this.shotSoundPath);
+        const sound = new Audio();
+        sound.crossOrigin = "anonymous"; 
+        sound.src = this.shotSoundPath;
         sound.volume = 0.3;
         sound.play().catch(() => {});
     }
     playExplosion() {
-        const sound = new Audio(this.explosionSoundPath);
+        const sound = new Audio();
+        sound.crossOrigin = "anonymous"; 
+        sound.src = this.explosionSoundPath;
         sound.volume = 0.5;
         sound.play().catch(() => {});
     }
@@ -309,8 +322,11 @@ class Enemy {
         this.width = 32; this.height = 32;
         this.speed = 2; this.active = true;
         this.shootTimer = Math.random() * 60;
+
         this.image = new Image();
-        this.image.src = 'assets/enemy.jfif';
+        this.image.crossOrigin = "anonymous";
+        this.image.src =  ASSET_BASE + "enemy.jfif";
+
         this.isLoaded = false;
         this.image.onload = () => this.isLoaded = true;
     }
@@ -422,7 +438,8 @@ class Player {
         this.width = 32; this.height = 32;
         this.speed = 5;
         this.image = new Image();
-        this.image.src = 'assets/player.jfif';
+        this.image.crossOrigin = "anonymous";
+        this.image.src =  ASSET_BASE + "player.jfif";
         this.isLoaded = false;
         this.image.onload = () => this.isLoaded = true;
         this.alive = true; // ← 生存フラグを追加
@@ -580,6 +597,7 @@ class Game {
         this.clearTimer = 0;
         this.isShowingCredits = false;
         this.score = 0;
+        this.audioInitialized =0;
         this.highScore = localStorage.getItem('void_circuit_highscore') || 0;
     }
 
@@ -588,14 +606,18 @@ class Game {
             document.getElementById('version-display').innerText = this.version;
 
             // シナリオの読み込み
-            const res = await fetch('scenario.json');
+            const res = await fetch(ASSET_BASE + 'scenario.json');
             const data = await res.json();
             this.enemyManager = new EnemyManager(data);
+
+            // 先にオーディオの器を作る
+            this.audio.initAudio();
 
             // 画像のプリロード（自機と敵）
             const loadImage = (src) => {
                 return new Promise((resolve) => {
                     const img = new Image();
+                    img.crossOrigin = "anonymous";
                     img.src = src;
                     img.onload = () => resolve(img);
                 });
@@ -604,17 +626,26 @@ class Game {
             // BGMの読み込み完了を待つPromiseを作成
             const loadAudio = (audio) => {
                 return new Promise((resolve) => {
+                    // すでに読み込みが終わっている可能性も考慮
+                    if (audio.readyState >= 4) return resolve();
+                    
                     audio.oncanplaythrough = () => resolve();
-                    audio.onerror = () => resolve(); // エラーでも進む
-                    audio.load(); // 読み込み開始
+                    audio.onerror = () => {
+                        console.warn("BGM load failed, but continuing...");
+                        resolve();
+                    };
+                    audio.load();
+                    
+                    // 5秒経っても終わらなければ強制的に次へ（保険）
+                    setTimeout(resolve, 5000);
                 });
             };
-
+            
             // 画像と一緒にBGMも待つ
             await Promise.all([
-                loadImage('assets/player.jfif'),
-                loadImage('assets/enemy.jfif'),
-                loadAudio(this.audio.bgm) // これを追加
+                loadImage( ASSET_BASE + "player.jfif"),
+                loadImage( ASSET_BASE + "enemy.jfif"),
+                loadAudio(this.audio.bgm)
             ]);
 
             this.isLoaded = true;
@@ -867,7 +898,7 @@ https://void-circuit.ani-net.com
             this.ctx.font = '16px "Press Start 2P"'; // Google Fontsでの名前を指定
             this.ctx.fillStyle = '#0FF';
             this.ctx.textAlign = 'center';
-            this.ctx.fillText('MISSION COMPLETE', this.width / 2, this.height / 2);
+            this.ctx.fillText('STAGE 1 CLEAR', this.width / 2, this.height / 2);
             
             // 5秒（300フレーム）経ったらリスタート画面へ
             if (this.clearTimer > 300) {
