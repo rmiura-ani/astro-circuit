@@ -6,8 +6,9 @@
     <meta name="twitter:title" content="PROJECT: VOID-CIRCUIT">
     <meta name="twitter:description" content="AIとプロデューサーが創り出した、虚無の回路を駆け抜けるSTG。">
     <meta name="twitter:image" content="https://void-circuit-assets.ani-net.com/player.jfif">
-    <title>PROJECT: VOID-CIRCUI</title>
+    <title>PROJECT: VOID-CIRCUIT</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
     <style>
         body {
             margin: 0; background-color: #111; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; 
@@ -109,6 +110,21 @@
             transform: scale(1.1);
         }
 
+        /* ふわふわ点滅のアニメーション定義 */
+        @keyframes pulseLoading {
+            0% { opacity: 1; color: #FFF; }
+            50% { opacity: 0.2; color: #555; } /* 黒に近いグレーまで落とす */
+            100% { opacity: 1; color: #FFF; }
+        }
+
+        /* メッセージにアニメーションを適用 */
+        #message {
+            animation: pulseLoading 2s ease-in-out infinite;
+            /* ドットフォントの「Loading」がより引き立つように少し影をつけるとカッコいいです */
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+
+        /* クレジット画面全体の基本設定 */
         #credit-screen {
             position: absolute;
             top: 480px; 
@@ -118,28 +134,56 @@
             color: #fff;
             background: transparent;
             z-index: 5;
-            display: none; /* JSで.scrollingが付くまで隠す */
-        }
-        #credit-screen h3 {
-            color: #FF0;
-            font-size: 10px;
-            margin-bottom: 30px;
+            font-family: 'DotGothic16', sans-serif;
         }
 
+        /* 各セクションの間隔 */
+        .credit-section {
+            margin-bottom: 60px; /* セクション間の余白を広げて贅沢に使う */
+            padding: 0 20px;
+        }
+
+        /* 項目見出し (コンセプトワークなど) */
+        .credit-section h3 {
+            color: #0FF; /* サイバーな水色 */
+            font-size: 12px;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+        }
+
+        /* ラベル部分 (製作総指揮など) */
+        .label {
+            color: #CCC; /* 少し暗めにして階層を作る */
+            font-size: 12px;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        /* 名前や内容のテキスト */
         #credit-screen p {
             font-size: 10px;
-            margin-bottom: 25px;
-            line-height: 1.6;
+            line-height: 1.4;
+            letter-spacing: 0.1em;   /* 文字同士の間隔を少し広げて「つまった感」を解消 */
+            margin-bottom: 20px;     /* 段落同士の間隔は少し持たせる */
+            text-align: center;
+            font-family: 'DotGothic16', sans-serif;
+        }
+
+        /* ★ ライセンス条文 (MIT License部分) の専用調整 */
+        #credit-screen .credit-section:nth-last-child(2) p {
+            font-size: 8px !important; /* 条文は小さくして密度を上げる */
+            line-height: 1.4;
+            text-align: justify; /* 両端揃えでマニュアル感を出す */
+            color: #CCC; /* グレーにして情報の優先度を下げる */
         }
 
         /* スクロールアニメーション */
         @keyframes scrollUp {
             0% { transform: translateY(0); }
-            80% { transform: translateY(-180%); } /* 80%の地点で最後まで出し切る */
-            100% { transform: translateY(-180%); } /* 残りの20%の時間は静止させる */
+            100% { transform: translateY(-100%); }
         }
         .scrolling {
-            animation: scrollUp 25s linear forwards; /* infiniteをforwardsに変えると最後で止まります */
+            animation: scrollUp 30s linear forwards;
         }
 </style>
 </head>
@@ -161,43 +205,50 @@
             <button id="share-btn" style="display: none;" onclick="event.stopPropagation();">SHARE ON X</button>
         </div>
 
-        <div id="credit-screen" style="display: none;">
-            <div class="credit-section">
-                <h3>--- PROJECT STAFF ---</h3>
-                <p><span class="label">PRODUCED BY</span><br>あに。部長</p>
-                <p>
-                    <span class="label">AI COLLABORATOR</span><br>
-                    Google Gemini 3 Flash<br>
-                    (Logic & Visual Generation)
-                </p>
-            </div>
-
-            <div class="credit-section">
-                <h3>--- CREATIVE ASSETS ---</h3>
-                <p><span class="label">MUSIC & SOUND</span><br>Suno AI</p>
-            </div>
-
-            <div class="credit-section">
-                <h3>--- TECHNOLOGY & OSS ---</h3>
-                <p>
-                    <span class="label">SOURCE CODE</span><br>
-                    Released as Open Source Software<br>
-                    on GitHub (MIT License)
-                </p>
-                <p>
-                    <span class="label">TYPOGRAPHY</span><br>
-                    "Press Start 2P" by CodeMan38<br>
-                    Licensed under SIL OFL
-                </p>
-            </div>
-
-            <div class="credit-section">
-                <p>--- MISSION STATUS ---</p>
-                <p>ALL SYSTEMS GO.</p>
-                <p>THANK YOU FOR PLAYING!</p>
-            </div>
+    <div id="credit-screen" style="display: none;">
+        <div class="credit-section">
+            <h3>--- CREATIVE TEAM ---</h3>
+            <p><span class="label">Concept Degisn</span><br>あに。部長</p>
+            <p><span class="label">Concept Assistang</span><br>生成AI Gemini</p>
+            <p>
+                <span class="label">Programming</span><br>
+                あに。部長<br>
+                (Assisted by Gemini, GitHub Copilot)
+            </p>
+            <p><span class="label">Background Music</span><br>音楽生成AI Suno<br>https://suno.com</p>
+            <p>
+                <span class="label">Sound Effect</span><br>
+                jsfxr<br>https://sfxr.me/
+            </p>
+            <p>
+                <span class="label">Image Asset</span><br>
+                Gemini (Imagen 3 / Nano Banana 2)
+            </p>
+            <p>
+                <span class="label">Typography</span><br>
+                "Press Start 2P" by CodeMan38<br>
+                (Licensed under SIL OFL)<BR>
+                https://fonts.google.com/specimen/Press+Start+2P
+            </p>
         </div>
 
+        <div class="credit-section">
+            <h3>--- LICENSE ---</h3>
+            <p>Copyright (c) 2026 あに。部長</p>
+            <p>
+                Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:<br>
+                The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.<br>
+                THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.<br>
+                <br>--- Third-Party Assets ---<br><br>
+                The Software includes assets that are the property of their respective owners. These assets are not covered by the MIT License, but are used under their own separate licenses. Please refer to the documentation of each asset for specific license terms.
+            </p>
+        </div>
+
+        <div class="credit-section">
+            <br><br><br><br><br><br><br><br><br>
+            <p>THANK YOU FOR PLAYING!</p>
+            <br><br><br><br><br><br><br><br><br>
+        </div>
     </div>
 </div>
 
@@ -246,13 +297,26 @@ class AudioManager {
         this.shotSoundPath =  ASSET_BASE + "shot.wav";
         this.explosionSoundPath = ASSET_BASE + "explosion.wav";
     }
-    // BGM初期化メソッド
+    // BGM/SE初期化メソッド
     initAudio() {
+        // BGM
         this.bgm = new Audio();
         this.bgm.crossOrigin = "anonymous"; 
         this.bgm.src = this.bgmUrl;
         this.bgm.loop = true;
         this.bgm.volume = 0.4;
+
+        // SE
+        this.sounds = {
+            shot: new Audio(),
+            explosion: new Audio()
+        };
+        Object.values(this.sounds).forEach(s => s.crossOrigin = "anonymous");
+        this.sounds.shot.src = this.shotSoundPath;
+        this.sounds.shot.volume = 0.3;        
+        this.sounds.explosion.src = this.explosionSoundPath;
+        this.sounds.explosion.volume = 0.5;
+
     }
     playBGM() { this.bgm.play().catch(e => console.log("BGM Error", e)); }
     fadeOutBGM(duration = 2000) {
@@ -274,17 +338,13 @@ class AudioManager {
         this.bgm.volume = 0.4;
     }
     playShot() {
-        const sound = new Audio();
-        sound.crossOrigin = "anonymous"; 
-        sound.src = this.shotSoundPath;
-        sound.volume = 0.3;
+        const sound = this.sounds.shot;
+        sound.currentTime = 0; // 再生位置を先頭に戻す（連射対応）
         sound.play().catch(() => {});
     }
     playExplosion() {
-        const sound = new Audio();
-        sound.crossOrigin = "anonymous"; 
-        sound.src = this.explosionSoundPath;
-        sound.volume = 0.5;
+        const sound = this.sounds.explosion;
+        sound.currentTime = 0; // 連続で爆発しても大丈夫
         sound.play().catch(() => {});
     }
 }
@@ -640,6 +700,9 @@ class Game {
                     setTimeout(resolve, 5000);
                 });
             };
+
+            // --- ここでSEのリストを抽出して待機させる ---
+//            const sePromises = Object.values(this.audio.sounds).map(se => loadAudio(se));
             
             // 画像と一緒にBGMも待つ
             await Promise.all([
@@ -651,6 +714,10 @@ class Game {
             this.isLoaded = true;
 
             // ロード完了したら「Click to Start」を出す
+            const messageEl = document.querySelector('#start-screen p');
+            messageEl.innerText = "Click to Start";
+            messageEl.style.animation = "none"; // 点滅を止める
+            messageEl.style.color = "#0FF";      // ついでに色をサイバーな水色に変えると「準備完了」感が出ます
             document.querySelector('#start-screen p').innerText = "Click to Start";
         } catch (e) { 
             console.error("Initialization Error", e); 
@@ -664,9 +731,31 @@ class Game {
 
         title.style.display = 'none'; // タイトルを隠す
         credits.style.display = 'block';
+
         credits.classList.remove('scrolling');
         void credits.offsetWidth;
         credits.classList.add('scrolling'); // アニメーション開始
+
+        // ★ アニメーション終了時のイベントを一度だけ登録
+        credits.onanimationend = () => {
+            // 3秒ほど余韻（サンクスメッセージ表示）を残してから戻る
+            setTimeout(() => {
+                this.backToTitle();
+            }, 3000); 
+        };
+    }
+
+    backToTitle() {
+        this.isShowingCredits = false;
+        const title = document.getElementById('title-content');
+        const credits = document.getElementById('credit-screen');
+
+        credits.style.display = 'none';
+        title.style.display = 'block';
+        
+        // 再び放置タイマーを動かして、ループを形成する
+        // (game.init().then() 内で作ったロジックを再利用)
+        this.startIdleTimer(); 
     }
 
     start() {
@@ -924,6 +1013,7 @@ https://void-circuit.ani-net.com
 }
 
 const game = new Game();
+
 game.init().then(() => {
     // --- 放置タイマーの設定 ---
     // 3秒間（3000ミリ秒）何もしなければ showCredits を呼ぶ
