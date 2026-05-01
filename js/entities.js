@@ -130,7 +130,17 @@ class Enemy {
     }
 
     draw(ctx) {
-        if (this.isLoaded) ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+        if (this.isLoaded) {
+            ctx.save();
+            // 画面上部は無敵のため
+            if (this.y < 20) {
+                ctx.globalAlpha = 0.5;
+            } else {
+                ctx.globalAlpha = 1.0;
+            }            
+            ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+            ctx.restore();
+        }
     }
 }
 
@@ -289,14 +299,32 @@ class Particle {
 
     draw(ctx) {
         const ratio = this.life / this.maxLife;
+        
         if (this.type === 'player') {
+            // 自機：赤〜オレンジの円形爆発
             ctx.fillStyle = `rgba(255, ${Math.floor(255 * ratio)}, ${Math.floor(100 * ratio)}, ${ratio})`;
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
             ctx.fill();
-        } else {
+        } 
+        else if (this.type === 'boss') {
+            // ★ 強敵用：青白い光（シアン）から白へ変化し、光り輝く（グロー効果）
+            ctx.save();
+            ctx.shadowBlur = 10 * ratio; // 粒子の周りを光らせる
+            ctx.shadowColor = '#0FF';
+            ctx.fillStyle = `rgba(${Math.floor(100 + 155 * (1 - ratio))}, 255, 255, ${ratio})`;
+            
+            // 少し回転させて菱形に描画するとさらにカッコいいです
+            ctx.translate(this.x, this.y);
+            ctx.rotate(Math.PI / 4);
+            ctx.fillRect(-this.size / 2, -this.size / 2, this.size * 1.5, this.size * 1.5);
+            ctx.restore();
+        } 
+        else {
+            // 通常の敵：黄色いスクエア粒子
             ctx.fillStyle = `rgba(255, 255, 100, ${ratio})`;
             ctx.fillRect(this.x, this.y, this.size, this.size);
         }
-    }
+        
+}
 }

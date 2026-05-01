@@ -7,7 +7,7 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
-        this.version = "0.15";
+        this.version = "0.19";
 
         // GitHub上の資産ベースURL
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
@@ -102,24 +102,34 @@ class Game {
     }
 
     setupEvents() {
-        // 共通の開始処理
-        const handleStart = () => {
-            if (!this.isLoaded || this.isRunning) return;
-            
-            this.stopIdleTimer();
-            this.start();
+        const proceed = () => {
+            // 1. クレジット中ならタイトルへ
+            if (this.isShowingCredits) {
+                this.backToTitle();
+                return;
+            }
+            // 2. ゲーム実行中なら何もしない（プレイ中の誤爆防止）
+            if (this.isRunning) {
+                return;
+            }
+            // 3. プレイヤーが死んでいる場合（リトライ処理）
+            if (this.player && !this.player.alive) {
+                if (this.gameOverTimer < 30) return; 
+            }
+            // 4. タイトル画面等ならゲーム開始
+            if (this.isLoaded) {
+                this.stopIdleTimer();
+                this.start();
+            }
         };
 
-        // 1. クリック（またはタップ）でスタート
-        document.getElementById('start-screen').addEventListener('click', handleStart);
+        // マウス・タップ：司令塔を呼ぶだけ
+        document.getElementById('start-screen').addEventListener('click', proceed);
 
-        // 2. キーボードでスタート（スペースキーとZキーに対応）
+        // キーボード：特定のキーの時だけ司令塔を呼ぶ
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space' || e.code === 'KeyZ') {
-                // クレジット表示中やタイトル画面なら開始
-                if (!this.isRunning) {
-                    handleStart();
-                }
+                proceed();
             }
         });
 
@@ -132,7 +142,7 @@ class Game {
 
     startIdleTimer() {
         this.stopIdleTimer();
-        this.idleTimeout = setTimeout(() => this.showCredits(), 5000);
+        this.idleTimeout = setTimeout(() => this.showCredits(), 10000);
     }
 
     stopIdleTimer() {
@@ -228,6 +238,7 @@ class Game {
             // 敵が自機ショットに当たったか
             if (e instanceof Enemy) {
                 this.entities.forEach(b => {
+                    if (e.y < 20) return;
                     if (b instanceof Bullet) {
                         if (b.x < e.x + e.width && b.x + b.width > e.x && 
                             b.y < e.y + e.height && b.y + b.height > e.y) {
@@ -243,19 +254,8 @@ class Game {
                                 this.score += scoreGain;
                                 this.updateScoreUI();
                                 console.log(scoreGain);
-                                
-                                this.audio.playExplosion();
-                                // ★ HP 10以上の強敵ボーナス演出
-                                if (e.maxHp >= 10) {
-                                    setTimeout(() => {// 0.2秒(200ms)だけ遅らせて2回目のドカン！
-                                        this.audio.playExplosion();
-                                    }, 200);
 
-                                    // パーティクルも派手目に
-                                    for (let i = 0; i < 32; i++) this.particles.push(new Particle(e.x + 16, e.y + 16));
-                                }else{
-                                    for (let i = 0; i < 8; i++) this.particles.push(new Particle(e.x + 16, e.y + 16));
-                                }
+                                this.createExplosion(e.x + 16, e.y + 16, e);
                             } else {
                                 this.audio.playHitSound();
                                 for (let i = 0; i < 2; i++) this.particles.push(new Particle(b.x, b.y));
@@ -267,6 +267,40 @@ class Game {
         });
     }
 
+    createExplosion(x, y, enemy) {
+        const hp = enemy.maxHp || 1;
+        
+        // --- 1. パーティクル生成 ---
+        const count = 10 + (hp * 2);
+        const type = hp >= 10 ? 'boss' : 'enemy';
+        const speedMultiplier = 1 + (hp * 0.01);
+
+        for (let i = 0; i < count; i++) {
+            const vx = (Math.random() - 0.5) * 10 * speedMultiplier;
+            const vy = (Math.random() - 0.5) * 10 * speedMultiplier;
+            this.particles.push(new Particle(x, y, type, vx, vy));
+        }
+
+        // --- 2. 爆発音の制御 ---
+        // 1回目の音は即座に鳴らす
+        this.audio.playExplosion();
+
+        // 強敵（HP10以上）なら、時間差でもう一発鳴らす
+        if (hp >= 10) {
+            setTimeout(() => {
+                // ゲームがまだ続いていれば鳴らす（念のため）
+                if (this.audio) this.audio.playExplosion();
+            }, 200);
+            
+            // さらにHPが50以上の超強敵なら、0.4秒後にもう一発追加しても面白いですよ！
+            if (hp >= 50) {
+                setTimeout(() => {
+                    if (this.audio) this.audio.playExplosion();
+                }, 400);
+            }
+        }
+    }
+ 
     triggerGameOver() {
         this.player.alive = false;
         this.audio.fadeOutBGM();
@@ -292,6 +326,7 @@ class Game {
         // GAME OVER
         if (!this.player.alive) {
             this.gameOverTimer++;
+            this.ctx.font = '16px "Press Start 2P", cursive';
             this.ctx.fillStyle = 'rgba(255,0,0,0.5)';
             this.ctx.fillRect(0, 180, 320, 100);   
             this.ctx.fillStyle = '#FFF';
@@ -303,6 +338,7 @@ class Game {
         // STAGE CLEAR
         if (this.isCleared) {
             this.clearTimer++;
+            this.ctx.font = '16px "Press Start 2P", cursive';
             this.ctx.fillStyle = '#0FF';
             this.ctx.textAlign = 'center';
             this.ctx.fillText('STAGE 1 CLEAR', 160, 240);
