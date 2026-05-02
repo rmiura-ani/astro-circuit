@@ -162,6 +162,9 @@ class SineEnemy extends Enemy {
     }
 }
 
+/**
+ * とどまる敵
+ */
 class StationaryEnemy extends Enemy {
     constructor(assetBase, x, y, bulletType, hp = 1, stopY = 100, waitTime = 120) {
         super(assetBase, x, y, bulletType, hp);
@@ -223,6 +226,7 @@ class Player {
         this.height = 32;
         this.speed = 5;
         this.alive = true;
+        this.invincibleTimer = 0; // 無敵残りフレーム
 
         this.image = new Image();
         this.image.crossOrigin = "anonymous";
@@ -234,6 +238,9 @@ class Player {
     update(input, cw, ch) {
         if (!this.alive) return;
 
+        if (this.invincibleTimer > 0) {
+            this.invincibleTimer--;
+        }
         // キーボード移動
         if (input.isPressed('ArrowUp') && this.y > 0) this.y -= this.speed;
         if (input.isPressed('ArrowDown') && this.y < ch - this.height) this.y += this.speed;
@@ -263,8 +270,22 @@ class Player {
 
     draw(ctx) {
         if (!this.alive) return;
+        // 無敵時間中の点滅処理
+        if (this.invincibleTimer > 0) {
+            if (Math.floor(this.invincibleTimer / 5) % 2 === 0) {
+                return; // ここで描画をスキップ
+            }
+        }
         if (this.isLoaded) ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
         else { ctx.fillStyle = '#0FF'; ctx.fillRect(this.x, this.y, this.width, this.height); }
+    }
+
+    setInvincible(frames) {
+        this.invincibleTimer = frames;
+    }
+
+    get isInvincible() {
+        return this.invincibleTimer > 0;
     }
 }
 

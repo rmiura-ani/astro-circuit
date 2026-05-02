@@ -59,9 +59,10 @@ class AudioManager {
             'stage1': 'bgm-stage1.mp3'
         };
         const soundVolumes = {
-            shot: 0.3,      // 連射するので少し小さめに
-            explosion: 0.3, // 迫力が欲しいので大きめ
-            hitHurt: 0.5,   // 被弾時はしっかり聞こえる程度
+            shot: 0.3,
+            explosion: 0.3,
+            hitHurt: 0.5,
+            powerUp: 0.7
             // 今後新しいSEが増えても、ここに追加するだけでOK
         };
 
@@ -79,7 +80,8 @@ class AudioManager {
         this.sounds = {
             shot: new Audio(),
             explosion: new Audio(),
-            hitHurt: new Audio()
+            hitHurt: new Audio(),
+            powerUp: new Audio()
         };
 
         Object.keys(this.sounds).forEach(key => {
@@ -155,6 +157,7 @@ class AudioManager {
     playShot() { this._playSound('shot'); }
     playExplosion() { this._playSound('explosion'); }
     playHitSound(){ this._playSound('hitHurt'); }
+    playPowerUp(){ this._playSound('powerUp'); }
 
     _playSound(key) {
         const s = this.sounds[key];

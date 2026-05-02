@@ -7,7 +7,7 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
-        this.version = "0.23";
+        this.version = "0.24";
 
         // GitHub上の資産ベースURL
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
@@ -26,6 +26,7 @@ class Game {
         this.isCleared = false;
         this.clearTimer = 0;
         this.frame = 0;
+        this.currentLives = 0;
         this.score = 0;
         this.highScore = 0;
 
@@ -35,7 +36,7 @@ class Game {
         this.player = null;
         this.enemyManager = null;
 
-        // 難易度ごとのパラメータ例
+        // 難易度ごとのパラメータ
         this.difficultyParams = {
             'EASY':     { enemySpeed: 0.8, fireRate: 0.5 },
             'NORMAL':   { enemySpeed: 1.0, fireRate: 1.0 },
@@ -52,14 +53,13 @@ class Game {
         document.getElementById('version-display').innerText = this.version;
 
         try {
-            // 1. シナリオ読み込み (ローカル優先)
-            let scenarioData;
             const isLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
             const path = isLocal ? './scenario.json' : this.assetBase + 'scenario.json';
 
             const res = await fetch(path);
             if (!res.ok) throw new Error("Fetch failed");
 
+            let scenarioData;
             try {
                 scenarioData = await res.json();
             } catch (parseError) {
@@ -67,8 +67,8 @@ class Game {
                 messageEl.style.color = "#FF4444";
                 return;
             }
-
             this.enemyManager = new EnemyManager(scenarioData);
+            this.enemyManager.scenarioPath = path;
 
             // 2. オーディオ準備
             this.audio.initAudio();
@@ -114,63 +114,10 @@ class Game {
     }
 
     setupEvents() {
-        // --- 1. まず「設定ボタン」単体のイベントを最初に登録する ---
-        const configBtn = document.getElementById('config-open-btn');
-        if (configBtn) {
-            configBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // 親（start-screen）へのクリック伝播を完全に止める
-                this.config.open(); // ★委託
-            });
-        }
-
-        // --- 2. 画面全体のクリック・キー操作（proceed） ---
-        const proceed = () => {
-            // 設定画面が開いているなら、何もしない（設定画面内のクリックは別で処理）
-            if (this.isConfigMode) return;
-
-            // クレジット中ならタイトルへ
-            if (this.isShowingCredits) {
-                this.backToTitle();
-                return;
-            }
-
-            // ゲーム実行中なら何もしない
-            if (this.isRunning) return;
-
-            // プレイヤーが死んでいる場合のリトライ待ち
-            if (this.player && !this.player.alive) {
-                if (this.gameOverTimer < 30) return; 
-            }
-
-            // タイトル画面等ならゲーム開始
-            if (this.isLoaded) {
-                this.stopIdleTimer();
-                this.start();
-            }
-        };
-
-        // マウス・タップ：start-screenをクリックした時
-        document.getElementById('start-screen').addEventListener('click', proceed);
-
-        // キーボード
-        window.addEventListener('keydown', (e) => {
-            // 1. 設定画面が開いている場合：設定画面の入力処理へ
-            if (this.config.isMode) {
-                this.config.handleInput(e);
-                return; // 他の処理をスキップ
-            }
-
-            // 2. 設定画面が閉じていて「KeyC」が押された場合：設定画面を開く
-            if (e.code === 'KeyC') {
-                this.config.open();
-                return;
-            }
-
-            // 3. Z / Space が押された場合：ゲーム開始などの進行処理
-            if (e.code === 'Space' || e.code === 'KeyZ') {
-                proceed();
-            }
-        });
+        // 1. マウス系の登録
+        this.setupMouseEvents();
+        // 2. キーボード系の登録
+        this.setupKeyboardEvents();
 
         // クレジット終了時のイベント
         const credits = document.getElementById('credit-screen');
@@ -179,12 +126,89 @@ class Game {
         };
     }
 
+    /**
+     * ゲームの進行（開始・リトライ・戻る）を一括管理
+     */
+    handleProceed() {
+        if (this.config.isMode) return;
+        if (this.isRunning) return;
+
+        if (this.isShowingCredits) {
+            this.backToTitle();
+            return;
+        }
+
+        if (this.player && !this.player.alive && this.gameOverTimer < 30) return;
+
+        if (this.isLoaded) {
+            this.stopIdleTimer();
+            this.start();
+        }
+    }
+
+    /**
+     * マウス・タップイベント
+     */
+    setupMouseEvents() {
+        // 画面クリックで進行
+        document.getElementById('start-screen').addEventListener('click', () => {
+            this.handleProceed();
+        });
+
+        // 設定を開く
+        const configBtn = document.getElementById('config-open-btn');
+        if (configBtn) {
+            configBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.stopIdleTimer();
+                this.config.open();
+            });
+        }
+
+        // 設定を閉じる (SAVE AND EXIT)
+        const exitItem = document.querySelector('.config-item[data-setting="exit"]');
+        if (exitItem) {
+            exitItem.addEventListener('click', () => {
+                this.startIdleTimer();
+                this.config.close();
+            });
+        }
+    }
+
+    /**
+     * キーボードイベント
+     */
+    setupKeyboardEvents() {
+        window.addEventListener('keydown', (e) => {
+            // 設定画面中
+            if (this.config.isMode) {
+                this.config.handleInput(e);
+                if (!this.config.isMode) this.startIdleTimer(); // 閉じたら再開
+                return;
+            }
+
+            // キーによる設定オープン
+            if (e.code === 'KeyC' && !this.isRunning && !this.isShowingCredits) {
+                this.stopIdleTimer();
+                this.config.open();
+                return;
+            }
+
+            // 進行（Z/Space）
+            if (e.code === 'Space' || e.code === 'KeyZ') {
+                this.handleProceed();
+            }
+        });
+    }
+
     startIdleTimer() {
+        console.log("startIdleTimer");
         this.stopIdleTimer();
         this.idleTimeout = setTimeout(() => this.showCredits(), 10000);
     }
 
     stopIdleTimer() {
+        console.log("stopIdleTimer");
         if (this.idleTimeout) clearTimeout(this.idleTimeout);
     }
 
@@ -217,6 +241,14 @@ class Game {
     start() {
         document.getElementById('start-screen').style.display = 'none';
         document.getElementById('hi-score-display').classList.remove('counter-stop');
+
+        // 難易度設定を反映
+        const level = this.config.difficulty; // 'EASY', 'NORMAL' など
+        const params = this.difficultyParams[level];
+        if (this.enemyManager) {
+            this.enemyManager.setDifficulty(params);
+        }
+
         this.reset();
         this.isRunning = true;
         this.audio.playBGM('stage1');
@@ -228,11 +260,17 @@ class Game {
         this.particles = [];
         this.frame = 0;
         this.score = 0;
+        this.hasExtended = false; // エクステンド済みフラグ
+        this.hasCounterStopped = false; // カンスト
+        this.extendThreshold = this.config.extend;
         this.gameOverTimer = 0;
+        this.currentLives = this.config.lives;
         this.clearTimer = 0;
         this.isCleared = false;
         this.enemyManager.reset();
         this.audio.resetBGM();
+
+        this.updateLivesUI(); // 残機表示を更新する関数（後述）を呼ぶ
     }
 
     update() {
@@ -272,7 +310,7 @@ class Game {
     }
 
     checkCollisions() {
-        if (!this.player.alive) return;
+        if (!this.player.alive || this.player.isInvincible) return;
         const px = this.player.x + 16, py = this.player.y + 16;
 
         this.entities.forEach(e => {
@@ -350,10 +388,36 @@ class Game {
     }
  
     triggerGameOver() {
+        if (!this.player.alive) return; // 二重処理防止
+
         this.player.alive = false;
-        this.audio.fadeOutBGM();
+
+        // 派手な爆発パーティクル
         this.audio.playExplosion();
         for (let i = 0; i < 30; i++) this.particles.push(new Particle(this.player.x + 16, this.player.y + 16, 'player'));
+
+        // 残機を減らす
+        this.currentLives--;
+        this.updateLivesUI();
+
+        if (this.currentLives > 0) {
+            // まだ残機がある：1.5秒後にリスポーン
+            setTimeout(() => {
+                this.respawnPlayer();
+            }, 1500);
+        } else {
+            // 残機なし：BGM停止してゲームオーバーへ
+            this.audio.fadeOutBGM();
+        } 
+    }
+
+    respawnPlayer() {
+        this.player.x = this.width / 2 - 16;
+        this.player.y = this.height - 80;
+        this.player.alive = true;
+
+        // 復活直後の無敵時間
+        this.player.setInvincible(180);
     }
 
     draw() {
@@ -372,7 +436,7 @@ class Game {
         this.player.draw(this.ctx);
 
         // GAME OVER
-        if (!this.player.alive) {
+        if (!this.player.alive && this.currentLives <= 0) {
             this.gameOverTimer++;
             this.ctx.font = '16px "Press Start 2P", cursive';
             this.ctx.fillStyle = 'rgba(255,0,0,0.5)';
@@ -380,7 +444,7 @@ class Game {
             this.ctx.fillStyle = '#FFF';
             this.ctx.textAlign = 'center';
             this.ctx.fillText('GAME OVER', 160, 230);
-            if (this.gameOverTimer > 180) this.endSession("GAME OVER");
+            if (this.gameOverTimer === 180) this.endSession("GAME OVER");
         }
 
         // STAGE CLEAR
@@ -390,7 +454,7 @@ class Game {
             this.ctx.fillStyle = '#0FF';
             this.ctx.textAlign = 'center';
             this.ctx.fillText('STAGE 1 CLEAR', 160, 240);
-            if (this.clearTimer > 300) this.endSession("CONGRATULATIONS!");
+            if (this.clearTimer === 301) this.endSession("CONGRATULATIONS!");
         }
     }
 
@@ -411,6 +475,7 @@ class Game {
     }
     
     endSession(msg) {
+        if (!this.isRunning && this.gameOverTimer > 182) return; // すでに終了処理済みなら無視
         this.isRunning = false;
         this.isShowingCredits = false;
 
@@ -437,35 +502,109 @@ class Game {
         shareBtn.style.display = 'block';
         shareBtn.onclick = (e) => {
             e.stopPropagation();
-            const text = encodeURIComponent(`PROJECT: VOID-CIRCUIT v${this.version}
-スコア: ${this.score}
+
+            const rawPath = this.enemyManager.scenarioPath || 'UNKNOWN';
+            const opName = rawPath.split('/').pop().replace('.json', '').toUpperCase();
+
+            const opLevel = {
+                'EASY': 'E',
+                'NORMAL': 'N',
+                'HARD': 'H',
+                'VERY HARD': 'VH'
+            }[this.config.difficulty] || 'UN-'; // ここを少しスッキリさせました
+
+            // エクステンド設定をコードネームに変換
+            const extendCfg = this.config.extend === 'NONE' 
+                ? 'OFF' 
+                : `${(this.config.extend / 1000).toLocaleString()}k`; // 1000で割るのが一般的（300kなど）
+
+            // 投稿テキストの組み立て
+            const postText = `PROJECT: VOID-CIRCUIT v${this.version}
+----------------------------
+■ DATA LINK ESTABLISHED
+■ SCORE  : ${this.score.toLocaleString()}
+■ MISSION: ${opName}-${opLevel}-${extendCfg}
+----------------------------
 作戦完了。虚無の回路を突破せよ。
 
 https://void-circuit.ani-net.com
 
-#VoidCircuit #80年代STG #IndieGame #SunoAI`);
-            window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
+#VoidCircuit #80年代STG #IndieGame #SunoAI`;
+
+            // ★ ここを text ではなく postText に修正
+            const encodedText = encodeURIComponent(postText);
+            window.open(`https://twitter.com/intent/tweet?text=${encodedText}`, '_blank');
         };
+        
         this.startIdleTimer();
     }
 
     updateScoreUI() {
         const MAX_SCORE = 99999990;
-        this.score = this.score > MAX_SCORE ? MAX_SCORE : this.score;
         
+        // スコアが上限に達したかどうかの判定
+        if (this.score >= MAX_SCORE) {
+            this.score = MAX_SCORE; // 値を固定
+
+            // ★初めてカンストした瞬間にだけ音を鳴らす
+            if (!this.hasCounterStopped) {
+                this.audio.playPowerUp(); // 勝利のファンファーレ！
+                this.hasCounterStopped = true; // フラグを立てて二度目を防止
+            }
+        }
+
         const scoreEl = document.getElementById('score-display');
         const hiScoreEl = document.getElementById('hi-score-display');
 
         if (scoreEl) {
             scoreEl.innerText = `SCORE: ${this.score.toString().padStart(8, '0')}`;
+            
+            // カンスト演出（金色にするなど）の適用
             if (this.score >= MAX_SCORE) {
                 scoreEl.classList.add('counter-stop');
             } else {
                 scoreEl.classList.remove('counter-stop');
             }
-        }        
+        }    
+
+        // ハイスコアの表示
         if (hiScoreEl) {
             hiScoreEl.innerText = `HI-SCORE: ${this.highScore.toString().padStart(8, '0')}`;
+        }
+
+        // エクステンド判定
+        if (this.hasExtended || this.extendThreshold === 'NONE') return;
+        if (this.score >= this.extendThreshold) {
+            this.currentLives++;         // 残機増加
+            this.audio.playPowerUp(); 
+            this.updateLivesUI(true);        // 残機表示を即更新            
+            this.hasExtended = true;     // 1回限定フラグを立てる
+        }
+    }
+
+    updateLivesUI(shouldBlink = false) {
+        const livesEl = document.getElementById('lives-display');
+        if (!livesEl) return;
+
+        const stockCount = Math.max(0, this.currentLives - 1);
+        const icon = "🚀"; // SF風にロケットを選択
+
+        if (stockCount === 0) {
+            livesEl.innerText = ""; // 残機0（最後の1機）の時は何も表示しない（お好みで）
+        } else if (stockCount <= 3) {
+            livesEl.innerText = icon.repeat(stockCount);
+        } else {
+            // P2フォントが適用されると "x4" がカチッとしたドット文字になります
+            livesEl.innerText = `${icon}x${stockCount}`;
+        }
+        // エクステンド時のチカチカ演出
+        if (shouldBlink) {
+            livesEl.classList.add('extend-blink');
+            
+            // 2秒後に点滅を止める
+            setTimeout(() => {
+                livesEl.classList.remove('extend-blink');
+            }, 2000);
         }
     }
 

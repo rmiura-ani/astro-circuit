@@ -57,7 +57,7 @@ canvas {
     justify-content: space-between;
     
     pointer-events: none; 
-    z-index: 100;
+    z-index: 50;
 }
 
 #score-display, 
@@ -75,6 +75,31 @@ canvas {
     text-shadow: 0 0 5px rgba(255, 215, 0, 0.8); /* ほんのり光らせる */
 }
 
+
+#lives-display {
+    position: absolute;
+    top: 25px;      /* スコア表示の下 */
+    left: 10px;
+    color: #FFFFFF;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 12px; /* 絵文字と数字のバランスを見て調整 */
+    text-shadow: 2px 2px 0px #000; /* 文字をくっきりさせる */
+    pointer-events: none; /* プレイの邪魔にならないように */
+    z-index: 10;
+}
+
+/* 残機更新時の強調点滅 */
+.extend-blink {
+    animation: extend-blink-effect 0.2s step-end infinite;
+    color: #FF0 !important; /* 点滅中は黄色にする */
+}
+
+@keyframes extend-blink-effect {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+
 /* 画面共通レイアウト（スタート、クレジット等） */
 .screen {
     position: absolute;
@@ -87,7 +112,7 @@ canvas {
     justify-content: center;
     align-items: center;
     background: rgba(0,0,0,0.85);
-    z-index: 10;
+    z-index: 60;
     text-align: center;
     cursor: pointer;
 }
@@ -120,8 +145,7 @@ canvas {
 #config-screen {
     background: #000088;
     color: #fff;
-    /* 左右の余白を減らして、中央に寄せる */
-    padding: 20px 15px; 
+    padding: 20px 15px;     /* 左右の余白を減らして、中央に寄せる */
     display: none;
     flex-direction: column;
     align-items: center; /* 中央揃えにする */
@@ -132,6 +156,7 @@ canvas {
     top: 0;
     left: 0;
     box-sizing: border-box;
+    z-index: 200; /* 圧倒的に高く設定 */
 }
 
 #config-menu {
