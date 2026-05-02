@@ -116,6 +116,59 @@ canvas {
     50% { opacity: 0.3; }
 }
 
+/* コンフィグ */
+#config-screen {
+    background: #000088;
+    color: #fff;
+    /* 左右の余白を減らして、中央に寄せる */
+    padding: 20px 15px; 
+    display: none;
+    flex-direction: column;
+    align-items: center; /* 中央揃えにする */
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    box-sizing: border-box;
+}
+
+#config-menu {
+    width: 90%; /* 少し余裕を持たせる */
+    margin-top: 10px;
+}
+
+.config-item {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    margin: 8px 0;
+    font-size: 10px; /* 画面サイズに合わせて調整 */
+    padding: 5px 8px;
+    box-sizing: border-box;
+    white-space: nowrap; /* 折り返しを防止 */
+}
+
+.config-item:hover {
+    background: rgba(255, 255, 255, 0.2); /* マウスが乗ったら少し明るく */
+}
+
+.config-item.active {
+    background: #fff;
+    color: #000;
+}
+
+.config-item.active .value {
+    animation: blink 0.5s infinite;
+}
+
+#config-screen p {
+    text-align: center;
+    width: 100%;
+    line-height: 1.6;
+}
+
 /* クレジット（スタッフロール）演出 */
 #credit-screen {
     display: none;

@@ -7,7 +7,7 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
-        this.version = "0.21";
+        this.version = "0.23";
 
         // GitHub上の資産ベースURL
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
@@ -16,6 +16,7 @@ class Game {
         this.input = new InputManager(this.canvas);
         this.audio = new AudioManager(this.assetBase);
         this.stars = new Starfield(this.width, this.height);
+        this.config = new ConfigManager(this);
 
         // ゲーム状態
         this.isRunning = false;
@@ -33,6 +34,14 @@ class Game {
         this.particles = [];
         this.player = null;
         this.enemyManager = null;
+
+        // 難易度ごとのパラメータ例
+        this.difficultyParams = {
+            'EASY':     { enemySpeed: 0.8, fireRate: 0.5 },
+            'NORMAL':   { enemySpeed: 1.0, fireRate: 1.0 },
+            'HARD':     { enemySpeed: 1.3, fireRate: 2.0 },
+            'VERY HARD': { enemySpeed: 1.5, fireRate: 3.0 }
+        };
     }
 
     /**
@@ -69,18 +78,21 @@ class Game {
                 const i = new Image(); i.crossOrigin = "anonymous"; i.src = src; i.onload = () => r(i); i.onerror = () => r(null);
             });
             const loadAud = (a) => new Promise(r => {
-                if (!a.src) return r();
+                if (!a || !a.src) return r(); // aがundefinedの場合のガードも追加
                 a.oncanplaythrough = () => r();
                 a.onerror = () => r();
                 a.load();
                 setTimeout(r, 5000); // タイムアウト保険
             });
 
+            // SEとBGMの両方を配列にまとめて Promise.all に渡す
             const sePromises = Object.values(this.audio.sounds).map(s => loadAud(s));
+            const bgmPromises = Object.values(this.audio.bgms).map(b => loadAud(b)); // ★ここを追加
+
             await Promise.all([
                 loadImg(this.assetBase + "player.jfif"),
                 loadImg(this.assetBase + "enemy.jfif"),
-                loadAud(this.audio.bgm),
+                ...bgmPromises, // ★this.audio.bgm から変更
                 ...sePromises
             ]);
 
@@ -102,32 +114,59 @@ class Game {
     }
 
     setupEvents() {
+        // --- 1. まず「設定ボタン」単体のイベントを最初に登録する ---
+        const configBtn = document.getElementById('config-open-btn');
+        if (configBtn) {
+            configBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // 親（start-screen）へのクリック伝播を完全に止める
+                this.config.open(); // ★委託
+            });
+        }
+
+        // --- 2. 画面全体のクリック・キー操作（proceed） ---
         const proceed = () => {
-            // 1. クレジット中ならタイトルへ
+            // 設定画面が開いているなら、何もしない（設定画面内のクリックは別で処理）
+            if (this.isConfigMode) return;
+
+            // クレジット中ならタイトルへ
             if (this.isShowingCredits) {
                 this.backToTitle();
                 return;
             }
-            // 2. ゲーム実行中なら何もしない（プレイ中の誤爆防止）
-            if (this.isRunning) {
-                return;
-            }
-            // 3. プレイヤーが死んでいる場合（リトライ処理）
+
+            // ゲーム実行中なら何もしない
+            if (this.isRunning) return;
+
+            // プレイヤーが死んでいる場合のリトライ待ち
             if (this.player && !this.player.alive) {
                 if (this.gameOverTimer < 30) return; 
             }
-            // 4. タイトル画面等ならゲーム開始
+
+            // タイトル画面等ならゲーム開始
             if (this.isLoaded) {
                 this.stopIdleTimer();
                 this.start();
             }
         };
 
-        // マウス・タップ：司令塔を呼ぶだけ
+        // マウス・タップ：start-screenをクリックした時
         document.getElementById('start-screen').addEventListener('click', proceed);
 
-        // キーボード：特定のキーの時だけ司令塔を呼ぶ
+        // キーボード
         window.addEventListener('keydown', (e) => {
+            // 1. 設定画面が開いている場合：設定画面の入力処理へ
+            if (this.config.isMode) {
+                this.config.handleInput(e);
+                return; // 他の処理をスキップ
+            }
+
+            // 2. 設定画面が閉じていて「KeyC」が押された場合：設定画面を開く
+            if (e.code === 'KeyC') {
+                this.config.open();
+                return;
+            }
+
+            // 3. Z / Space が押された場合：ゲーム開始などの進行処理
             if (e.code === 'Space' || e.code === 'KeyZ') {
                 proceed();
             }
@@ -153,6 +192,7 @@ class Game {
     showCredits() {
         this.isShowingCredits = true;
         document.getElementById('title-content').style.display = 'none';
+        document.getElementById('config-open-btn').style.display = 'none';
         const screen = document.getElementById('credit-screen');
         screen.style.display = 'block';
         screen.classList.add('scrolling');
@@ -165,7 +205,13 @@ class Game {
         screen.style.display = 'none';
         screen.classList.remove('scrolling');
         document.getElementById('title-content').style.display = 'block';
+        document.getElementById('config-open-btn').style.display = 'block';
         this.startIdleTimer();
+    }
+
+    // サウンドテスト
+    playBackSoundTest() {
+        this.audio.playSEByIndex(this.soundTestIndex);
     }
 
     start() {
@@ -173,7 +219,7 @@ class Game {
         document.getElementById('hi-score-display').classList.remove('counter-stop');
         this.reset();
         this.isRunning = true;
-        this.audio.playBGM();
+        this.audio.playBGM('stage1');
     }
 
     reset() {

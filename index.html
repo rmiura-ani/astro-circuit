@@ -31,12 +31,52 @@
         </div>
     </div>
 
+    <div id="config-screen" class="screen" style="display: none;">
+        <h2 style="color: #FF0; text-shadow: none;">SYSTEM CONFIGURATION</h2>
+        
+        <div id="config-menu">
+            <div class="config-item active" data-setting="difficulty">
+                <span>DIFFICULTY</span>
+                <span class="value">NORMAL</span>
+            </div>
+            <div class="config-item" data-setting="lives">
+                <span>PLAYER LIVES</span>
+                <span class="value">3</span>
+            </div>
+            <div class="config-item" data-setting="extend">
+                <span>EXTEND SCORE</span>
+                <span class="value">500000</span>
+            </div>
+            <BR>
+            <div class="config-item" data-setting="sound">
+                <span>SOUND TEST</span>
+                <span class="value">< SHOP ></span>
+            </div>
+            <div class="config-item" data-setting="bgm">
+                <span>BGM TEST</span>
+                <span class="value">< STAGE1 ></span>
+            </div>
+            <BR>
+            <div class="config-item" data-setting="exit">
+                <span style="color: #0FF;">> SAVE AND EXIT</span>
+            </div>
+        </div>
+
+        <p style="font-size: 10px; margin-top: 30px; color: #888;">
+            USE UP/DOWN TO SELECT<br>
+            USE LEFT/RIGHT TO CHANGE
+        </p>
+    </div>
+
     <div id="start-screen" class="screen">
         <div id="title-content">
             <h1>PROJECT:<br>VOID-CIRCUIT</h2>
             <p class="blink">Loading Assets...</p>
         </div>
-        
+        <div id="config-open-btn" style="position: absolute; bottom: 20px; left: 20px; cursor: pointer; z-index: 100;">
+            <span style="font-size: 10px; color: #888; border: 1px solid #888; padding: 5px;">⚙ CONFIGURATION</span>
+        </div>
+
         <div id="credit-screen">
             <div class="credit-content">
                 <h2>--- CREATIVE TEAM ---</h2>
@@ -86,6 +126,7 @@
 <script src="js/core.js"></script>
 <script src="js/entities.js"></script>
 <script src="js/utils.js"></script>
+<script src="js/config.js"></script>
 <script src="js/main.js"></script>
 
 </body>

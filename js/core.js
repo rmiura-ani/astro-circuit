@@ -14,6 +14,7 @@ class InputManager {
 
         // タッチ / マウス共通処理
         const handleTouch = (e) => {
+            if (!canvas) return; // キャンバスがない時は無視
             const rect = canvas.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -47,24 +48,16 @@ class AudioManager {
         this.assetBase = assetBase;
         this.bgm = null;
         this.sounds = {};
+        this.bgms = {}; // BGM用のコンテナ
+        this.seKeys = [];
+        this.bgmKeys = []; // BGMのキーリスト
     }
 
     initAudio() {
         // BGMの設定
-        this.bgm = new Audio();
-        this.bgm.crossOrigin = "anonymous"; 
-        this.bgm.src = this.assetBase + "bgm-stage1.mp3";
-        this.bgm.loop = true;
-        this.bgm.volume = 0.7;
-
-        // SEの設定
-        this.sounds = {
-            shot: new Audio(),
-            explosion: new Audio(),
-            hitHurt: new Audio()
+        const bgmFiles = {
+            'stage1': 'bgm-stage1.mp3'
         };
-
-        // 1. 各サウンドごとの音量設定（0.0 〜 1.0）
         const soundVolumes = {
             shot: 0.3,      // 連射するので少し小さめに
             explosion: 0.3, // 迫力が欲しいので大きめ
@@ -72,7 +65,23 @@ class AudioManager {
             // 今後新しいSEが増えても、ここに追加するだけでOK
         };
 
-        // 2. ループ処理
+        Object.keys(bgmFiles).forEach(key => {
+            const audio = new Audio();
+            audio.crossOrigin = "anonymous";
+            audio.src = this.assetBase + bgmFiles[key];
+            audio.loop = true;
+            audio.volume = 0.7;
+            this.bgms[key] = audio;
+        });
+        this.bgmKeys = Object.keys(this.bgms);
+        
+        // SEの設定
+        this.sounds = {
+            shot: new Audio(),
+            explosion: new Audio(),
+            hitHurt: new Audio()
+        };
+
         Object.keys(this.sounds).forEach(key => {
             const s = this.sounds[key];
             s.crossOrigin = "anonymous";
@@ -81,29 +90,65 @@ class AudioManager {
             // 設定があればそれを使い、なければデフォルト（0.5）にする
             s.volume = soundVolumes[key] !== undefined ? soundVolumes[key] : 0.5;
         });        
+
+        this.seKeys = Object.keys(this.sounds);
     }
 
-    playBGM() { this.bgm?.play().catch(() => {}); }
-    
+    playBGM(key) {
+        this.stopAllBGM();
+        this.currentBgm = this.bgms[key];
+        if (this.currentBgm) {
+            this.currentBgm.currentTime = 0;
+            this.currentBgm.play().catch(() => {});
+        }
+    }
+
+    stopAllBGM() {
+        Object.values(this.bgms).forEach(b => {
+            b.pause();
+        });
+    }
+
+    // --- サウンドテスト用：BGMをインデックスで再生 ---
+    playBGMByIndex(index) {
+        const key = this.bgmKeys[index];
+        this.playBGM(key);
+    }
+
+    get bgmCount() { return this.bgmKeys.length; }
+    getBGMName(index) { return this.bgmKeys[index] ? this.bgmKeys[index].toUpperCase() : "NONE"; }
+
+    // フェードアウト
     fadeOutBGM(duration = 2000) {
-        if (!this.bgm) return;
-        const startVolume = this.bgm.volume;
+        // currentBgm（今鳴っている曲）がなければ何もしない
+        if (!this.currentBgm) return;
+
+        const targetBgm = this.currentBgm; // 途中で曲が変わっても大丈夫なように保持
+        const startVolume = targetBgm.volume;
         const step = startVolume / (duration / 50);
+
         const interval = setInterval(() => {
-            if (this.bgm.volume > step) {
-                this.bgm.volume -= step;
+            if (targetBgm.volume > step) {
+                targetBgm.volume -= step;
             } else {
-                this.bgm.volume = 0;
-                this.bgm.pause();
+                targetBgm.volume = 0;
+                targetBgm.pause();
                 clearInterval(interval);
+                // フェードアウトが終わったら現在のBGM参照をクリア
+                if (this.currentBgm === targetBgm) this.currentBgm = null;
             }
         }, 50);
     }
 
+    // リセット
     resetBGM() {
-        if (!this.bgm) return;
-        this.bgm.currentTime = 0;
-        this.bgm.volume = 0.4;
+        // 全てのBGMを停止して音量を戻しておく
+        Object.values(this.bgms).forEach(b => {
+            b.pause();
+            b.currentTime = 0;
+            b.volume = 0.6; // initAudioで設定したデフォルト値
+        });
+        this.currentBgm = null;
     }
 
     // SE再生
@@ -117,6 +162,20 @@ class AudioManager {
             s.currentTime = 0;
             s.play().catch(() => {});
         }
+    }
+
+    playSEByIndex(index) {
+        const key = this.seKeys[index];
+        if (key) {
+            this._playSound(key);
+        }
+    }
+
+    get seCount() {
+        return this.seKeys.length;
+    }
+    getSEName(index) {
+        return this.seKeys[index] ? this.seKeys[index].toUpperCase() : "NONE";
     }
 }
 
@@ -144,7 +203,7 @@ class Starfield {
     update() {
         const move = (stars) => stars.forEach(s => { 
             s.y += s.speed; 
-            if (s.y > this.height) s.y = 0; 
+            if (s.y > this.height) s.y = -2; 
         });
         move(this.starsLayer1);
         move(this.starsLayer2);
