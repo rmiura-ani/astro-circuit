@@ -6,7 +6,8 @@ class ConfigManager {
         this.game = game;
         this.isMode = false;
         this.currentIndex = 0;
-        
+        this.debugCCount = 0;
+
         // デフォルト設定
         this.difficulty = 'NORMAL'
         this.lives = 3
@@ -35,6 +36,7 @@ class ConfigManager {
         this.items = document.querySelectorAll('.config-item');
         this.setupMouseEvents();
         this.updateSelection();
+        this.game.audio.resetBGM();
     }
 
     // 設定画面を閉じる
@@ -77,6 +79,37 @@ class ConfigManager {
                 this.close();
             }
         }
+
+        // デバックモード
+        if (e.code === 'KeyC') {
+                this.debugCCount++;
+                    if (this.debugCCount === 7) {
+                        this.game.isInvincibleCheat = !this.game.isInvincibleCheat;
+                        
+                        // カウントをリセットして、何度でも切り替え可能にする
+                        this.debugCCount = 0;
+
+                        const configUI = document.getElementById('config-screen');
+                        if (this.game.isInvincibleCheat) {
+                            this.game.cheatUsedInSession = true;
+                            // ONの時：ゴールドに光る
+                            this.game.audio.playPowerUp(); 
+                            if (configUI) {
+                                configUI.style.color = "#FFD700";
+                                configUI.style.textShadow = "0 0 10px #FFF";
+                            }
+                            console.log("CHEAT: ON");
+                        } else {
+                            // OFFの時：元の色に戻す
+                            this.game.audio.playExplosion(); // 通常の選択音などで通知
+                            if (configUI) {
+                                configUI.style.color = "";
+                                configUI.style.textShadow = "";
+                            }
+                            console.log("CHEAT: OFF");
+                        }
+                    }
+                }
     }
 
     // 値を変更する内部メソッド

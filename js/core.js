@@ -148,7 +148,7 @@ class AudioManager {
         Object.values(this.bgms).forEach(b => {
             b.pause();
             b.currentTime = 0;
-            b.volume = 0.6; // initAudioで設定したデフォルト値
+            b.volume = 0.7; // initAudioで設定したデフォルト値
         });
         this.currentBgm = null;
     }

@@ -67,11 +67,8 @@ class EnemyManager {
             } else {
                 enemy.speed *= this.enemySpeedMultiplier;
             }
-
             // 2. 発射レートの反映
-            if (enemy.shootInterval) {
-                enemy.shootInterval = Math.max(10, Math.floor(enemy.shootInterval / this.fireRateMultiplier));
-            }
+            enemy.fireRateMultiplier = this.fireRateMultiplier;
 
             game.entities.push(enemy);
             this.currentIndex++;

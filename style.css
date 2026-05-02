@@ -250,19 +250,27 @@ canvas {
 }
 
 #share-btn {
-    display: none;
-    margin-top: 20px;
-    padding: 10px 25px;
-    background: #1DA1F2;
-    color: white;
-    border: none;
-    border-radius: 20px;
-    font-family: 'DotGothic16', sans-serif;
-    font-weight: bold;
+    display: none; 
+    margin-top: 80px;      /* 誤操作防止の大きな余白 */
+    padding: 12px 24px;
+    
+    /* ★ Xブランドカラー：漆黒と白 */
+    background-color: #000000; 
+    color: #FFFFFF;
+    
+    /* 枠線を白にすると、黒背景のゲーム画面で際立ちます */
+    border: 1px solid #FFFFFF; 
+    border-radius: 4px;
+    
     cursor: pointer;
-    transition: transform 0.2s;
+    font-family: 'Arial Black', sans-serif; /* 少し力強いフォントに */
+    font-size: 14px;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
 }
 
+/* ホバー時に色を反転させると、操作感が良くなります */
 #share-btn:hover {
-    transform: scale(1.1);
+    background-color: #FFFFFF;
+    color: #000000;
 }

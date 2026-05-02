@@ -63,6 +63,8 @@ class Enemy {
         this.maxHp = hp;
         this.active = true;
         this.shootTimer = Math.random() * 60;
+        this.baseShootInterval = 120; 
+        this.fireRateMultiplier = 1.0;
 
         this.image = new Image();
         this.image.crossOrigin = "anonymous";
@@ -77,11 +79,11 @@ class Enemy {
 
         if (this.active) {
             this.shootTimer++;
-            if (this.shootTimer > 120) {
+            const currentInterval = this.baseShootInterval / this.fireRateMultiplier;
+            if (this.shootTimer >= currentInterval) {
                 this.shoot(game);
                 this.shootTimer = 0;
-            }
-        }
+            }        }
     }
 
     shoot(game) {
@@ -194,7 +196,8 @@ class StationaryEnemy extends Enemy {
                 this.x = this.baseX + Math.sin(this.timer * 0.2) * 2; // 2px幅で揺れる
 
                 // 停止中、一定間隔で弾を撃つ（例：30フレームごと）
-                if (this.timer % 30 === 0) {
+                const interval = Math.max(10, 30 / this.fireRateMultiplier);
+                if (this.timer % Math.floor(interval) === 0) {
                     this.shoot(game);
                 }
 

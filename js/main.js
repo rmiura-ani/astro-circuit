@@ -7,7 +7,7 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
-        this.version = "0.24";
+        this.version = "0.25";
 
         // GitHub上の資産ベースURL
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
@@ -29,6 +29,8 @@ class Game {
         this.currentLives = 0;
         this.score = 0;
         this.highScore = 0;
+        this.isInvincibleCheat = false;
+        this.cheatUsedInSession = false;
 
         this.idleTimeout = null;
         this.entities = [];
@@ -38,10 +40,10 @@ class Game {
 
         // 難易度ごとのパラメータ
         this.difficultyParams = {
-            'EASY':     { enemySpeed: 0.8, fireRate: 0.5 },
+            'EASY':     { enemySpeed: 0.8, fireRate: 0.7 },
             'NORMAL':   { enemySpeed: 1.0, fireRate: 1.0 },
-            'HARD':     { enemySpeed: 1.3, fireRate: 2.0 },
-            'VERY HARD': { enemySpeed: 1.5, fireRate: 3.0 }
+            'HARD':     { enemySpeed: 1.1, fireRate: 1.5 },
+            'VERY HARD': { enemySpeed: 1.3, fireRate: 2.0 }
         };
     }
 
@@ -98,7 +100,7 @@ class Game {
 
             // ロード完了したら「Click to Start」を出す
             this.isLoaded = true;
-            messageEl.innerText = "Click to Start";
+            messageEl.innerText = "Click or [Z]Key to Start";
             messageEl.style.color = "#0FF";
             messageEl.style.animation = "none";
 
@@ -198,18 +200,42 @@ class Game {
             if (e.code === 'Space' || e.code === 'KeyZ') {
                 this.handleProceed();
             }
+
+            // ゲーム中断（ECS）
+            if (e.key === 'Escape'　 && this.isRunning) {
+                this.escCount = (this.escCount || 0) + 1;
+                
+                // 画面全体を一瞬赤くして「警告」を表現する演出を追加
+                const container = document.getElementById('game-container');
+                if (container) {
+                    // 警告演出：一瞬だけ赤く光らせ、セピア調で「異常事態」を表現
+                    container.style.transition = "filter 0.1s";
+                    container.style.filter = "brightness(1.2) sepia(1) saturate(5) hue-rotate(-50deg)";
+                    
+                    setTimeout(() => { 
+                        container.style.filter = ""; 
+                    }, 150);
+                }
+
+                if (this.escCount >= 2) {
+                    this.escCount = 0;
+                    this.currentLives = 1;
+                    this.onPlayerMiss();
+                } else {
+                    // 1秒以内に2回目が来なければカウントリセット
+                    setTimeout(() => { this.escCount = 0; }, 1000);
+                }
+            }
         });
     }
 
     startIdleTimer() {
-        console.log("startIdleTimer");
         this.stopIdleTimer();
         this.idleTimeout = setTimeout(() => this.showCredits(), 10000);
     }
 
     stopIdleTimer() {
-        console.log("stopIdleTimer");
-        if (this.idleTimeout) clearTimeout(this.idleTimeout);
+         if (this.idleTimeout) clearTimeout(this.idleTimeout);
     }
 
     // クレジット表示
@@ -231,11 +257,6 @@ class Game {
         document.getElementById('title-content').style.display = 'block';
         document.getElementById('config-open-btn').style.display = 'block';
         this.startIdleTimer();
-    }
-
-    // サウンドテスト
-    playBackSoundTest() {
-        this.audio.playSEByIndex(this.soundTestIndex);
     }
 
     start() {
@@ -310,15 +331,16 @@ class Game {
     }
 
     checkCollisions() {
-        if (!this.player.alive || this.player.isInvincible) return;
         const px = this.player.x + 16, py = this.player.y + 16;
 
         this.entities.forEach(e => {
             // 自機が敵や敵弾に当たったか
-            if (e instanceof Enemy || e instanceof EnemyBullet) {
-                const dx = px - (e.x + e.width / 2), dy = py - (e.y + e.height / 2);
-                if (Math.sqrt(dx * dx + dy * dy) < 10) {
-                    this.triggerGameOver();
+            if (this.player.alive && !this.player.isInvincible && !this.isInvincibleCheat){
+                if (e instanceof Enemy || e instanceof EnemyBullet) {
+                    const dx = px - (e.x + e.width / 2), dy = py - (e.y + e.height / 2);
+                    if (Math.sqrt(dx * dx + dy * dy) < 10) {
+                        this.onPlayerMiss();
+                    }
                 }
             }
             // 敵が自機ショットに当たったか
@@ -387,7 +409,7 @@ class Game {
         }
     }
  
-    triggerGameOver() {
+    onPlayerMiss() {
         if (!this.player.alive) return; // 二重処理防止
 
         this.player.alive = false;
@@ -506,12 +528,15 @@ class Game {
             const rawPath = this.enemyManager.scenarioPath || 'UNKNOWN';
             const opName = rawPath.split('/').pop().replace('.json', '').toUpperCase();
 
-            const opLevel = {
+            let opLevel;
+            opLevel = {
                 'EASY': 'E',
                 'NORMAL': 'N',
                 'HARD': 'H',
                 'VERY HARD': 'VH'
-            }[this.config.difficulty] || 'UN-'; // ここを少しスッキリさせました
+            }[this.config.difficulty] || 'UN';
+            if (this.cheatUsedInSession) { opLevel = opLevel +'(CHEAT)'; }
+
 
             // エクステンド設定をコードネームに変換
             const extendCfg = this.config.extend === 'NONE' 
@@ -521,7 +546,6 @@ class Game {
             // 投稿テキストの組み立て
             const postText = `PROJECT: VOID-CIRCUIT v${this.version}
 ----------------------------
-■ DATA LINK ESTABLISHED
 ■ SCORE  : ${this.score.toLocaleString()}
 ■ MISSION: ${opName}-${opLevel}-${extendCfg}
 ----------------------------
