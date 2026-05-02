@@ -55,7 +55,7 @@ class AudioManager {
         this.bgm.crossOrigin = "anonymous"; 
         this.bgm.src = this.assetBase + "bgm-stage1.mp3";
         this.bgm.loop = true;
-        this.bgm.volume = 0.4;
+        this.bgm.volume = 0.7;
 
         // SEの設定
         this.sounds = {
@@ -63,13 +63,24 @@ class AudioManager {
             explosion: new Audio(),
             hitHurt: new Audio()
         };
-        
+
+        // 1. 各サウンドごとの音量設定（0.0 〜 1.0）
+        const soundVolumes = {
+            shot: 0.3,      // 連射するので少し小さめに
+            explosion: 0.3, // 迫力が欲しいので大きめ
+            hitHurt: 0.5,   // 被弾時はしっかり聞こえる程度
+            // 今後新しいSEが増えても、ここに追加するだけでOK
+        };
+
+        // 2. ループ処理
         Object.keys(this.sounds).forEach(key => {
             const s = this.sounds[key];
             s.crossOrigin = "anonymous";
             s.src = this.assetBase + `${key}.wav`;
-            s.volume = (key === 'shot') ? 0.3 : 0.5;
-        });
+            
+            // 設定があればそれを使い、なければデフォルト（0.5）にする
+            s.volume = soundVolumes[key] !== undefined ? soundVolumes[key] : 0.5;
+        });        
     }
 
     playBGM() { this.bgm?.play().catch(() => {}); }

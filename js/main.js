@@ -7,7 +7,7 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
-        this.version = "0.20";
+        this.version = "0.21";
 
         // GitHub上の資産ベースURL
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
@@ -204,11 +204,13 @@ class Game {
             if (isFiring && this.frame % 10 === 0) {
                 this.entities.push(new Bullet(this.player.x + 14, this.player.y));
                 this.audio.playShot();       
-                this.score += 10;   // 弾打ちしたら加点弱め
+                this.score += 20;   // 弾打ちしたら加点弱め
                 this.updateScoreUI();
             }else{
-                this.score += 30;   // 生きてたら加点
-                this.updateScoreUI();
+                if (this.frame % 5 === 0) {
+                    this.score += 30;   // 生きてたら加点
+                    this.updateScoreUI();
+                }
             }
             this.checkCollisions();
 
