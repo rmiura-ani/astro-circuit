@@ -1,275 +1,191 @@
 /**
- * ゲーム全体を統括するメインクラス
+ * ゲーム全体を統括するメインクラス (v0.25 Refactored)
  */
 class Game {
     constructor() {
+        // --- 設定・定数 ---
         this.canvas = document.getElementById('game-canvas');
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
         this.version = "0.25";
-
-        // GitHub上の資産ベースURL
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
 
-        // サブシステムの初期化
+        // --- サブシステム ---
         this.input = new InputManager(this.canvas);
         this.audio = new AudioManager(this.assetBase);
         this.stars = new Starfield(this.width, this.height);
         this.config = new ConfigManager(this);
+        this.config.loadConfig();
 
-        // ゲーム状態
+        // --- ゲーム内部状態（プライベート変数風） ---
+        this._score = 0;
+        this._lives = this.config.lives;
+        this.highScore = parseInt(localStorage.getItem('void_circuit_highscore')) || 0;
+        
         this.isRunning = false;
         this.isLoaded = false;
         this.isShowingCredits = false;
-        this.gameOverTimer = 0;
         this.isCleared = false;
-        this.clearTimer = 0;
-        this.frame = 0;
-        this.currentLives = 0;
-        this.score = 0;
-        this.highScore = 0;
         this.isInvincibleCheat = false;
+        this.isBgmFading = false;
         this.cheatUsedInSession = false;
 
-        this.idleTimeout = null;
+        this.frame = 0;
+        this.gameOverTimer = 0;
+        this.clearTimer = 0;
+        this.escCount = 0;
+
         this.entities = [];
         this.particles = [];
         this.player = null;
         this.enemyManager = null;
+        this.idleTimeout = null;
 
-        // 難易度ごとのパラメータ
+        // 難易度テーブル
         this.difficultyParams = {
-            'EASY':     { enemySpeed: 0.8, fireRate: 0.7 },
-            'NORMAL':   { enemySpeed: 1.0, fireRate: 1.0 },
-            'HARD':     { enemySpeed: 1.1, fireRate: 1.5 },
+            'EASY':      { enemySpeed: 0.8, fireRate: 0.7 },
+            'NORMAL':    { enemySpeed: 1.0, fireRate: 1.0 },
+            'HARD':      { enemySpeed: 1.1, fireRate: 1.5 },
             'VERY HARD': { enemySpeed: 1.3, fireRate: 2.0 }
         };
     }
 
-    /**
-     * 初期化：アセット読み込みとシナリオ準備
-     */
+    // --- プロパティ Setter (値をいじるとUIが勝手に変わる) ---
+    set score(val) {
+        const MAX_SCORE = 99999990;
+        this._score = Math.min(val, MAX_SCORE);
+        this.updateScoreUI();
+    }
+    get score() { return this._score; }
+
+    set currentLives(val) {
+        this._lives = val;
+        this.updateLivesUI();
+    }
+    get currentLives() { return this._lives; }
+
+    /** 初期化 */
     async init() {
         const messageEl = document.querySelector('#start-screen p');
         document.getElementById('version-display').innerText = this.version;
+        document.getElementById('config-open-btn').style.display = 'none';
 
         try {
-            const isLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+            const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
             const path = isLocal ? './scenario.json' : this.assetBase + 'scenario.json';
 
             const res = await fetch(path);
             if (!res.ok) throw new Error("Fetch failed");
+            const scenarioData = await res.json();
 
-            let scenarioData;
-            try {
-                scenarioData = await res.json();
-            } catch (parseError) {
-                messageEl.innerText = "⚠️ SCENARIO ERROR: Check JSON Syntax";
-                messageEl.style.color = "#FF4444";
-                return;
-            }
             this.enemyManager = new EnemyManager(scenarioData);
             this.enemyManager.scenarioPath = path;
 
-            // 2. オーディオ準備
             this.audio.initAudio();
+            await this.preloadAssets();
 
-            // 3. アセットのプリロード
-            const loadImg = (src) => new Promise(r => { 
-                const i = new Image(); i.crossOrigin = "anonymous"; i.src = src; i.onload = () => r(i); i.onerror = () => r(null);
-            });
-            const loadAud = (a) => new Promise(r => {
-                if (!a || !a.src) return r(); // aがundefinedの場合のガードも追加
-                a.oncanplaythrough = () => r();
-                a.onerror = () => r();
-                a.load();
-                setTimeout(r, 5000); // タイムアウト保険
-            });
-
-            // SEとBGMの両方を配列にまとめて Promise.all に渡す
-            const sePromises = Object.values(this.audio.sounds).map(s => loadAud(s));
-            const bgmPromises = Object.values(this.audio.bgms).map(b => loadAud(b)); // ★ここを追加
-
-            await Promise.all([
-                loadImg(this.assetBase + "player.jfif"),
-                loadImg(this.assetBase + "enemy.jfif"),
-                ...bgmPromises, // ★this.audio.bgm から変更
-                ...sePromises
-            ]);
-
-            // ロード完了したら「Click to Start」を出す
             this.isLoaded = true;
-            messageEl.innerText = "Click or [Z]Key to Start";
-            messageEl.style.color = "#0FF";
-            messageEl.style.animation = "none";
+            this.updateScoreUI();
+            this.setStartMessage("Click or [Z]Key to Start", "#0FF");
+            document.getElementById('config-open-btn').style.display = 'block';
 
-            // 4. イベント登録 & 放置タイマー開始
             this.setupEvents();
             this.startIdleTimer();
-
         } catch (e) {
             console.error(e);
-            messageEl.innerText = "❌ ERROR: Failed to Load Assets";
-            messageEl.style.color = "#FF4444";
+            this.setStartMessage("❌ ERROR: Failed to Load Assets", "#F44");
         }
     }
 
-    setupEvents() {
-        // 1. マウス系の登録
-        this.setupMouseEvents();
-        // 2. キーボード系の登録
-        this.setupKeyboardEvents();
+    async preloadAssets() {
+        const loadAud = (a) => new Promise(r => {
+            if (!a || !a.src) return r();
+            a.oncanplaythrough = () => r();
+            a.onerror = () => r();
+            a.load();
+            setTimeout(r, 5000);
+        });
 
-        // クレジット終了時のイベント
+        const bgmPromises = Object.values(this.audio.bgms).map(loadAud);
+        const sePromises = Object.values(this.audio.sounds).map(loadAud);
+        
+        // 画像は簡易的にロード（Enemyクラス等で個別にloadイベントがあるため最低限）
+        await Promise.all([...bgmPromises, ...sePromises]);
+    }
+
+    setStartMessage(text, color) {
+        const el = document.querySelector('#start-screen p');
+        el.innerText = text;
+        el.style.color = color;
+        el.style.animation = "none";
+    }
+
+    /** イベント登録 */
+    setupEvents() {
+        // 開始/クリック系
+        document.getElementById('start-screen').addEventListener('click', () => this.handleProceed());
+        
+        // 設定ボタン
+        document.getElementById('config-open-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.stopIdleTimer();
+            this.config.open();
+        });
+
+        // キーボード
+        window.addEventListener('keydown', (e) => this.handleKeyDown(e));
+
+        // クレジット終了検知
         const credits = document.getElementById('credit-screen');
         credits.onanimationend = () => {
             setTimeout(() => { if (this.isShowingCredits) this.backToTitle(); }, 5000);
         };
     }
 
-    /**
-     * ゲームの進行（開始・リトライ・戻る）を一括管理
-     */
-    handleProceed() {
-        if (this.config.isMode) return;
-        if (this.isRunning) return;
-
-        if (this.isShowingCredits) {
-            this.backToTitle();
+    handleKeyDown(e) {
+        if (this.config.isMode) {
+            this.config.handleInput(e);
+            if (!this.config.isMode) this.startIdleTimer();
             return;
         }
 
-        if (this.player && !this.player.alive && this.gameOverTimer < 30) return;
-
-        if (this.isLoaded) {
+        if (e.code === 'KeyC' && !this.isRunning && !this.isShowingCredits) {
             this.stopIdleTimer();
-            this.start();
+            this.config.open();
+        }
+
+        if (['Space', 'KeyZ'].includes(e.code)) this.handleProceed();
+
+        if (e.key === 'Escape' && this.isRunning) this.handleEmergencyEscape();
+    }
+
+    handleEmergencyEscape() {
+        this.escCount++;
+        this.visualEffectWarning();
+        if (this.escCount >= 2) {
+            this.escCount = 0;
+            this.currentLives = 1;
+            this.onPlayerMiss();
+        } else {
+            setTimeout(() => { this.escCount = 0; }, 1000);
         }
     }
 
-    /**
-     * マウス・タップイベント
-     */
-    setupMouseEvents() {
-        // 画面クリックで進行
-        document.getElementById('start-screen').addEventListener('click', () => {
-            this.handleProceed();
-        });
-
-        // 設定を開く
-        const configBtn = document.getElementById('config-open-btn');
-        if (configBtn) {
-            configBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.stopIdleTimer();
-                this.config.open();
-            });
-        }
-
-        // 設定を閉じる (SAVE AND EXIT)
-        const exitItem = document.querySelector('.config-item[data-setting="exit"]');
-        if (exitItem) {
-            exitItem.addEventListener('click', () => {
-                this.startIdleTimer();
-                this.config.close();
-            });
-        }
+    visualEffectWarning() {
+        const container = document.getElementById('game-container');
+        if (!container) return;
+        container.style.transition = "filter 0.1s";
+        container.style.filter = "brightness(1.2) sepia(1) saturate(5) hue-rotate(-50deg)";
+        setTimeout(() => { container.style.filter = ""; }, 150);
     }
 
-    /**
-     * キーボードイベント
-     */
-    setupKeyboardEvents() {
-        window.addEventListener('keydown', (e) => {
-            // 設定画面中
-            if (this.config.isMode) {
-                this.config.handleInput(e);
-                if (!this.config.isMode) this.startIdleTimer(); // 閉じたら再開
-                return;
-            }
-
-            // キーによる設定オープン
-            if (e.code === 'KeyC' && !this.isRunning && !this.isShowingCredits) {
-                this.stopIdleTimer();
-                this.config.open();
-                return;
-            }
-
-            // 進行（Z/Space）
-            if (e.code === 'Space' || e.code === 'KeyZ') {
-                this.handleProceed();
-            }
-
-            // ゲーム中断（ECS）
-            if (e.key === 'Escape'　 && this.isRunning) {
-                this.escCount = (this.escCount || 0) + 1;
-                
-                // 画面全体を一瞬赤くして「警告」を表現する演出を追加
-                const container = document.getElementById('game-container');
-                if (container) {
-                    // 警告演出：一瞬だけ赤く光らせ、セピア調で「異常事態」を表現
-                    container.style.transition = "filter 0.1s";
-                    container.style.filter = "brightness(1.2) sepia(1) saturate(5) hue-rotate(-50deg)";
-                    
-                    setTimeout(() => { 
-                        container.style.filter = ""; 
-                    }, 150);
-                }
-
-                if (this.escCount >= 2) {
-                    this.escCount = 0;
-                    this.currentLives = 1;
-                    this.onPlayerMiss();
-                } else {
-                    // 1秒以内に2回目が来なければカウントリセット
-                    setTimeout(() => { this.escCount = 0; }, 1000);
-                }
-            }
-        });
-    }
-
-    startIdleTimer() {
-        this.stopIdleTimer();
-        this.idleTimeout = setTimeout(() => this.showCredits(), 10000);
-    }
-
-    stopIdleTimer() {
-         if (this.idleTimeout) clearTimeout(this.idleTimeout);
-    }
-
-    // クレジット表示
-    showCredits() {
-        this.isShowingCredits = true;
-        document.getElementById('title-content').style.display = 'none';
-        document.getElementById('config-open-btn').style.display = 'none';
-        const screen = document.getElementById('credit-screen');
-        screen.style.display = 'block';
-        screen.classList.add('scrolling');
-    }
-
-    // タイトルに戻る
-    backToTitle() {
-        this.isShowingCredits = false;
-        const screen = document.getElementById('credit-screen');
-        screen.style.display = 'none';
-        screen.classList.remove('scrolling');
-        document.getElementById('title-content').style.display = 'block';
-        document.getElementById('config-open-btn').style.display = 'block';
-        this.startIdleTimer();
-    }
-
+    /** ゲーム制御 */
     start() {
         document.getElementById('start-screen').style.display = 'none';
         document.getElementById('hi-score-display').classList.remove('counter-stop');
-
-        // 難易度設定を反映
-        const level = this.config.difficulty; // 'EASY', 'NORMAL' など
-        const params = this.difficultyParams[level];
-        if (this.enemyManager) {
-            this.enemyManager.setDifficulty(params);
-        }
-
+        
+        this.enemyManager?.setDifficulty(this.difficultyParams[this.config.difficulty]);
         this.reset();
         this.isRunning = true;
         this.audio.playBGM('stage1');
@@ -281,19 +197,19 @@ class Game {
         this.particles = [];
         this.frame = 0;
         this.score = 0;
-        this.hasExtended = false; // エクステンド済みフラグ
-        this.hasCounterStopped = false; // カンスト
+        this.currentLives = this.config.lives;
+        this.hasExtended = false;
+        this.hasCounterStopped = false;
         this.extendThreshold = this.config.extend;
         this.gameOverTimer = 0;
-        this.currentLives = this.config.lives;
         this.clearTimer = 0;
         this.isCleared = false;
+        this.isBgmFading = false;
         this.enemyManager.reset();
         this.audio.resetBGM();
-
-        this.updateLivesUI(); // 残機表示を更新する関数（後述）を呼ぶ
     }
 
+    /** メインループ */
     update() {
         this.stars.update();
         if (!this.isRunning) return;
@@ -302,334 +218,281 @@ class Game {
         this.player.update(this.input, this.width, this.height);
         this.enemyManager.update(this.frame, this);
 
-        if (this.player.alive) { 
-            // 自機ショット
-            // Zキー、スペースキー または 画面タッチ で発射
-            const isFiring = this.input.isPressed('KeyZ') || this.input.isPressed('Space') || this.input.isTouching;
-            if (isFiring && this.frame % 10 === 0) {
-                this.entities.push(new Bullet(this.player.x + 14, this.player.y));
-                this.audio.playShot();       
-                this.score += 20;   // 弾打ちしたら加点弱め
-                this.updateScoreUI();
-            }else{
-                if (this.frame % 5 === 0) {
-                    this.score += 30;   // 生きてたら加点
-                    this.updateScoreUI();
-                }
-            }
+        if (this.player.alive) {
+            this.handlePlayerShooting();
             this.checkCollisions();
-
-            // クリア判定
-            if (this.enemyManager.isFinished && this.entities.filter(e => e instanceof Enemy).length === 0 && this.player.alive) {
-                this.isCleared = true;
-            }
+            this.checkClearCondition();
         }
-        // 全エンティティ更新
+
+        this.updateEntities();
+    }
+
+    handlePlayerShooting() {
+        const isFiring = this.input.isPressed('KeyZ') || this.input.isPressed('Space') || this.input.isTouching;
+        if (isFiring && this.frame % 10 === 0) {
+            this.entities.push(new Bullet(this.player.x + 14, this.player.y));
+            this.audio.playShot();
+            this.score += 20;
+        } else if (this.frame % 5 === 0) {
+            this.score += 30; // 生存ボーナス
+        }
+    }
+
+    updateEntities() {
         [...this.entities, ...this.particles].forEach(e => e.update(this));
         this.entities = this.entities.filter(e => e.active);
         this.particles = this.particles.filter(e => e.active);
     }
 
     checkCollisions() {
-        const px = this.player.x + 16, py = this.player.y + 16;
-
-        this.entities.forEach(e => {
-            // 自機が敵や敵弾に当たったか
-            if (this.player.alive && !this.player.isInvincible && !this.isInvincibleCheat){
+        // 1. プレイヤーの被弾
+        if (this.player.alive && !this.player.isInvincible && !this.isInvincibleCheat) {
+            const px = this.player.x + 16, py = this.player.y + 16;
+            for (const e of this.entities) {
                 if (e instanceof Enemy || e instanceof EnemyBullet) {
-                    const dx = px - (e.x + e.width / 2), dy = py - (e.y + e.height / 2);
-                    if (Math.sqrt(dx * dx + dy * dy) < 10) {
+                    const dx = px - (e.x + e.width/2), dy = py - (e.y + e.height/2);
+                    if (Math.sqrt(dx*dx + dy*dy) < 10) {
                         this.onPlayerMiss();
+                        return;
                     }
                 }
             }
-            // 敵が自機ショットに当たったか
-            if (e instanceof Enemy) {
-                this.entities.forEach(b => {
-                    if (e.y < 20) return;
-                    if (b instanceof Bullet) {
-                        if (b.x < e.x + e.width && b.x + b.width > e.x && 
-                            b.y < e.y + e.height && b.y + b.height > e.y) {
-                            
-                            b.active = false; // 弾は消える
+        }
 
-                            // 敵に1ダメージ与え、撃破されたかチェック
-                            const isDestroyed = e.takeDamage(1);
-
-                            if (isDestroyed) {
-                                // （例：100, 300, 600, 1000... と増えていく形）
-                                const scoreGain = 50 * e.maxHp * (e.maxHp + 1);
-                                this.score += scoreGain;
-                                this.updateScoreUI();
-                                console.log(scoreGain);
-
-                                this.createExplosion(e.x + 16, e.y + 16, e);
-                            } else {
-                                this.audio.playHitSound();
-                                for (let i = 0; i < 2; i++) this.particles.push(new Particle(b.x, b.y));
-                            }
-                        }
+        // 2. 敵の被弾
+        this.entities.filter(e => e instanceof Enemy).forEach(enemy => {
+            if (enemy.y < 20) return;
+            this.entities.filter(b => b instanceof Bullet).forEach(bullet => {
+                if (this.isHit(bullet, enemy)) {
+                    bullet.active = false;
+                    if (enemy.takeDamage(1)) {
+                        const scoreGain = 50 * enemy.maxHp * (enemy.maxHp + 1);
+                        this.score += scoreGain;
+                        console.log(`Score:+${scoreGain}`);
+                        this.createExplosion(enemy.x + 16, enemy.y + 16, enemy);
+                    } else {
+                        this.audio.playHitSound();
+                        this.particles.push(new Particle(bullet.x, bullet.y));
                     }
-                });
-            }
+                }
+            });
         });
     }
 
-    createExplosion(x, y, enemy) {
-        const hp = enemy.maxHp || 1;
-        
-        // --- 1. パーティクル生成 ---
-        const count = 10 + (hp * 2);
-        const type = hp >= 10 ? 'boss' : 'enemy';
-        const speedMultiplier = 1 + (hp * 0.01);
+    isHit(rect1, rect2) {
+        return rect1.x < rect2.x + rect2.width && rect1.x + rect1.width > rect2.x &&
+               rect1.y < rect2.y + rect2.height && rect1.y + rect1.height > rect2.y;
+    }
 
-        for (let i = 0; i < count; i++) {
-            const vx = (Math.random() - 0.5) * 10 * speedMultiplier;
-            const vy = (Math.random() - 0.5) * 10 * speedMultiplier;
-            this.particles.push(new Particle(x, y, type, vx, vy));
-        }
-
-        // --- 2. 爆発音の制御 ---
-        // 1回目の音は即座に鳴らす
-        this.audio.playExplosion();
-
-        // 強敵（HP10以上）なら、時間差でもう一発鳴らす
-        if (hp >= 10) {
-            setTimeout(() => {
-                // ゲームがまだ続いていれば鳴らす（念のため）
-                if (this.audio) this.audio.playExplosion();
-            }, 200);
-            
-            // さらにHPが50以上の超強敵なら、0.4秒後にもう一発追加しても面白いですよ！
-            if (hp >= 50) {
-                setTimeout(() => {
-                    if (this.audio) this.audio.playExplosion();
-                }, 400);
+    checkClearCondition() {
+        if (this.enemyManager.isFinished && 
+            this.entities.filter(e => e instanceof Enemy).length === 0) {
+            if (!this.isCleared) {
+                this.isCleared = true;
+                this.audio.fadeOutBGM(3000); // 3秒かけてフェード
             }
         }
     }
- 
+
+    /** 演出・エフェクト */
+    createExplosion(x, y, enemy) {
+        const hp = enemy.maxHp || 1;
+        const count = 10 + (hp * 2);
+        const type = hp >= 10 ? 'boss' : 'enemy';
+
+        for (let i = 0; i < count; i++) {
+            this.particles.push(new Particle(x, y, type));
+        }
+
+        this.audio.playExplosion();
+        if (hp >= 10) setTimeout(() => this.audio.playExplosion(), 200);
+        if (hp >= 50) setTimeout(() => this.audio.playExplosion(), 400);
+    }
+
     onPlayerMiss() {
-        if (!this.player.alive) return; // 二重処理防止
-
+        if (!this.player.alive) return;
         this.player.alive = false;
-
-        // 派手な爆発パーティクル
         this.audio.playExplosion();
         for (let i = 0; i < 30; i++) this.particles.push(new Particle(this.player.x + 16, this.player.y + 16, 'player'));
 
-        // 残機を減らす
         this.currentLives--;
-        this.updateLivesUI();
-
         if (this.currentLives > 0) {
-            // まだ残機がある：1.5秒後にリスポーン
-            setTimeout(() => {
-                this.respawnPlayer();
-            }, 1500);
+            setTimeout(() => this.respawnPlayer(), 1500);
         } else {
-            // 残機なし：BGM停止してゲームオーバーへ
             this.audio.fadeOutBGM();
-        } 
+        }
     }
 
     respawnPlayer() {
         this.player.x = this.width / 2 - 16;
         this.player.y = this.height - 80;
         this.player.alive = true;
-
-        // 復活直後の無敵時間
         this.player.setInvincible(180);
     }
 
+    /** 描画系 */
     draw() {
-        // 1. 背景の塗りつぶしと星空の描画（ここは常に動かしたい）
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.width, this.height);
         this.stars.draw(this.ctx);
 
-        // 2. プレイヤーが存在しない（＝ゲーム開始前）なら、ここで処理を切り上げる
-        if (!this.player) {
-            return; 
-        }
+        if (!this.player) return;
 
         this.entities.forEach(e => e.draw(this.ctx));
         this.particles.forEach(p => p.draw(this.ctx));
         this.player.draw(this.ctx);
 
-        // GAME OVER
+        this.drawOverlayMessages();
+    }
+
+    drawOverlayMessages() {
+        this.ctx.font = '16px "Press Start 2P", cursive';
+        this.ctx.textAlign = 'center';
+
         if (!this.player.alive && this.currentLives <= 0) {
             this.gameOverTimer++;
-            this.ctx.font = '16px "Press Start 2P", cursive';
             this.ctx.fillStyle = 'rgba(255,0,0,0.5)';
-            this.ctx.fillRect(0, 180, 320, 100);   
+            this.ctx.fillRect(0, 180, 320, 100);
             this.ctx.fillStyle = '#FFF';
-            this.ctx.textAlign = 'center';
             this.ctx.fillText('GAME OVER', 160, 230);
             if (this.gameOverTimer === 180) this.endSession("GAME OVER");
         }
 
-        // STAGE CLEAR
         if (this.isCleared) {
             this.clearTimer++;
-            this.ctx.font = '16px "Press Start 2P", cursive';
             this.ctx.fillStyle = '#0FF';
-            this.ctx.textAlign = 'center';
             this.ctx.fillText('STAGE 1 CLEAR', 160, 240);
             if (this.clearTimer === 301) this.endSession("CONGRATULATIONS!");
         }
     }
 
-    resize() {
-        const canvas = this.ctx.canvas;
-        const windowRatio = window.innerWidth / window.innerHeight;
-        const gameRatio = this.width / this.height; // 320 / 480 = 0.66...
-
-        if (windowRatio < gameRatio) {
-            // 画面が縦長すぎる場合（スマホなど）：幅を100%に
-            canvas.style.width = '100vw';
-            canvas.style.height = 'auto';
-        } else {
-            // 画面が横長すぎる場合（タブレット・PC）：高さを100%に
-            canvas.style.height = '100vh';
-            canvas.style.width = 'auto';
-        }
-    }
-    
+    /** セッション終了・シェア */
     endSession(msg) {
-        if (!this.isRunning && this.gameOverTimer > 182) return; // すでに終了処理済みなら無視
+        if (!this.isRunning && this.gameOverTimer > 182) return;
         this.isRunning = false;
-        this.isShowingCredits = false;
 
-        // ハイスコアを保存
-        const isNewRecord = this.score >= this.highScore && this.score > 0;
+        const isNewRecord = this.score > this.highScore && this.score > 0;
         if (isNewRecord) {
-                this.highScore = this.score;
+            this.highScore = this.score;
             localStorage.setItem('void_circuit_highscore', this.highScore);
             document.getElementById('hi-score-display').classList.add('counter-stop');
             this.updateScoreUI();
         }
-        let hiScoreMsg = isNewRecord 
-            ? `<br><br><span style="color: #ffff00; font-size: 1.2em; animation: blink 0.5s infinite;">★ NEW HI-SCORE !! ★</span>` 
-            : "";
-        const startScreen = document.getElementById('start-screen');
-        startScreen.style.display = 'flex';
-        startScreen.querySelector('p').innerHTML = `
-                ${msg}${hiScoreMsg}<br><br>
-                RETRY OPERATION?
-            `;
 
-        // シェアボタンを表示してイベント登録
-        const shareBtn = document.getElementById('share-btn');
-        shareBtn.style.display = 'block';
-        shareBtn.onclick = (e) => {
-            e.stopPropagation();
-
-            const rawPath = this.enemyManager.scenarioPath || 'UNKNOWN';
-            const opName = rawPath.split('/').pop().replace('.json', '').toUpperCase();
-
-            let opLevel;
-            opLevel = {
-                'EASY': 'E',
-                'NORMAL': 'N',
-                'HARD': 'H',
-                'VERY HARD': 'VH'
-            }[this.config.difficulty] || 'UN';
-            if (this.cheatUsedInSession) { opLevel = opLevel +'(CHEAT)'; }
-
-
-            // エクステンド設定をコードネームに変換
-            const extendCfg = this.config.extend === 'NONE' 
-                ? 'OFF' 
-                : `${(this.config.extend / 1000).toLocaleString()}k`; // 1000で割るのが一般的（300kなど）
-
-            // 投稿テキストの組み立て
-            const postText = `PROJECT: VOID-CIRCUIT v${this.version}
-----------------------------
-■ SCORE  : ${this.score.toLocaleString()}
-■ MISSION: ${opName}-${opLevel}-${extendCfg}
-----------------------------
-作戦完了。虚無の回路を突破せよ。
-
-https://void-circuit.ani-net.com
-
-#VoidCircuit #80年代STG #IndieGame #SunoAI`;
-
-            // ★ ここを text ではなく postText に修正
-            const encodedText = encodeURIComponent(postText);
-            window.open(`https://twitter.com/intent/tweet?text=${encodedText}`, '_blank');
-        };
-        
+        this.showStartScreen(msg, isNewRecord);
+        this.setupShareButton();
         this.startIdleTimer();
     }
 
+    showStartScreen(msg, isNew) {
+        const hiMsg = isNew ? `<br><br><span class="new-record">★ NEW HI-SCORE !! ★</span>` : "";
+        const screen = document.getElementById('start-screen');
+        screen.style.display = 'flex';
+        screen.querySelector('p').innerHTML = `${msg}${hiMsg}<br><br>RETRY OPERATION?`;
+    }
+
+    setupShareButton() {
+        const btn = document.getElementById('share-btn');
+        btn.style.display = 'block';
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            const text = this.generateShareText();
+            window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+        };
+    }
+
+    generateShareText() {
+        const rawPath = this.enemyManager.scenarioPath || 'UNKNOWN';
+        const opName = rawPath.split('/').pop().replace('.json', '').toUpperCase();
+        const difficulty = { 'EASY':'E', 'NORMAL':'N', 'HARD':'H', 'VERY HARD':'VH' }[this.config.difficulty];
+        const cheat = this.cheatUsedInSession ? '(CHEAT)' : '';
+        const extend = this.config.extend === 'NONE' ? 'OFF' : `${(this.config.extend/1000)}k`;
+
+        return `PROJECT: VOID-CIRCUIT v${this.version}\n` +
+               `----------------------------\n` +
+               `■ SCORE  : ${this.score.toLocaleString()}\n` +
+               `■ MISSION: ${opName}-${difficulty}${cheat}-${extend}\n` +
+               `----------------------------\n` +
+               `作戦完了。虚無の回路を突破せよ。\n\n` +
+               `https://void-circuit.ani-net.com\n` +
+               `#VoidCircuit #80年代STG #IndieGame`;
+    }
+
+    /** UI更新 */
     updateScoreUI() {
-        const MAX_SCORE = 99999990;
-        
-        // スコアが上限に達したかどうかの判定
-        if (this.score >= MAX_SCORE) {
-            this.score = MAX_SCORE; // 値を固定
-
-            // ★初めてカンストした瞬間にだけ音を鳴らす
-            if (!this.hasCounterStopped) {
-                this.audio.playPowerUp(); // 勝利のファンファーレ！
-                this.hasCounterStopped = true; // フラグを立てて二度目を防止
-            }
-        }
-
         const scoreEl = document.getElementById('score-display');
         const hiScoreEl = document.getElementById('hi-score-display');
-
         if (scoreEl) {
             scoreEl.innerText = `SCORE: ${this.score.toString().padStart(8, '0')}`;
-            
-            // カンスト演出（金色にするなど）の適用
-            if (this.score >= MAX_SCORE) {
+            if (this.score >= 99999990) {
                 scoreEl.classList.add('counter-stop');
-            } else {
-                scoreEl.classList.remove('counter-stop');
+                if (!this.hasCounterStopped) {
+                    this.audio.playPowerUp();
+                    this.hasCounterStopped = true;
+                }
             }
-        }    
-
-        // ハイスコアの表示
-        if (hiScoreEl) {
-            hiScoreEl.innerText = `HI-SCORE: ${this.highScore.toString().padStart(8, '0')}`;
         }
+        if (hiScoreEl) hiScoreEl.innerText = `HI-SCORE: ${this.highScore.toString().padStart(8, '0')}`;
 
         // エクステンド判定
-        if (this.hasExtended || this.extendThreshold === 'NONE') return;
-        if (this.score >= this.extendThreshold) {
-            this.currentLives++;         // 残機増加
-            this.audio.playPowerUp(); 
-            this.updateLivesUI(true);        // 残機表示を即更新            
-            this.hasExtended = true;     // 1回限定フラグを立てる
+        if (!this.hasExtended && this.extendThreshold !== 'NONE' && this.score >= this.extendThreshold) {
+            this.currentLives++;
+            this.audio.playPowerUp();
+            this.hasExtended = true;
+            this.triggerExtendBlink();
         }
     }
 
-    updateLivesUI(shouldBlink = false) {
-        const livesEl = document.getElementById('lives-display');
-        if (!livesEl) return;
+    updateLivesUI() {
+        const el = document.getElementById('lives-display');
+        if (!el) return;
+        const count = Math.max(0, this.currentLives - 1);
+        const icon = "🚀";
+        el.innerText = count === 0 ? "" : (count <= 3 ? icon.repeat(count) : `${icon}x${count}`);
+    }
 
-        const stockCount = Math.max(0, this.currentLives - 1);
-        const icon = "🚀"; // SF風にロケットを選択
+    triggerExtendBlink() {
+        const el = document.getElementById('lives-display');
+        el?.classList.add('extend-blink');
+        setTimeout(() => el?.classList.remove('extend-blink'), 2000);
+    }
 
-        if (stockCount === 0) {
-            livesEl.innerText = ""; // 残機0（最後の1機）の時は何も表示しない（お好みで）
-        } else if (stockCount <= 3) {
-            livesEl.innerText = icon.repeat(stockCount);
-        } else {
-            // P2フォントが適用されると "x4" がカチッとしたドット文字になります
-            livesEl.innerText = `${icon}x${stockCount}`;
+    /** その他管理 */
+    handleProceed() {
+        if (this.config.isMode || this.isRunning) return;
+        if (this.isShowingCredits) return this.backToTitle();
+        if (this.player && !this.player.alive && this.gameOverTimer < 30) return;
+        
+        if (this.isLoaded) {
+            this.stopIdleTimer();
+            this.start();
         }
-        // エクステンド時のチカチカ演出
-        if (shouldBlink) {
-            livesEl.classList.add('extend-blink');
-            
-            // 2秒後に点滅を止める
-            setTimeout(() => {
-                livesEl.classList.remove('extend-blink');
-            }, 2000);
-        }
+    }
+
+    startIdleTimer() {
+        this.stopIdleTimer();
+        this.idleTimeout = setTimeout(() => this.showCredits(), 10000);
+    }
+
+    stopIdleTimer() { if (this.idleTimeout) clearTimeout(this.idleTimeout); }
+
+    showCredits() {
+        this.isShowingCredits = true;
+        document.getElementById('title-content').style.display = 'none';
+        document.getElementById('config-open-btn').style.display = 'none';
+        const screen = document.getElementById('credit-screen');
+        screen.style.display = 'block';
+        screen.classList.add('scrolling');
+    }
+
+    backToTitle() {
+        this.isShowingCredits = false;
+        const screen = document.getElementById('credit-screen');
+        screen.style.display = 'none';
+        screen.classList.remove('scrolling');
+        document.getElementById('title-content').style.display = 'block';
+        document.getElementById('config-open-btn').style.display = 'block';
+        this.startIdleTimer();
     }
 
     loop() {

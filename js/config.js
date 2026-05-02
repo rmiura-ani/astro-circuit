@@ -1,5 +1,5 @@
 /**
- * 設定画面（BIOS風）を管理するクラス
+ * 設定画面（BIOS風）を管理するクラス (v0.25 Refactored)
  */
 class ConfigManager {
     constructor(game) {
@@ -8,175 +8,210 @@ class ConfigManager {
         this.currentIndex = 0;
         this.debugCCount = 0;
 
-        // デフォルト設定
-        this.difficulty = 'NORMAL'
-        this.lives = 3
-        this.extend = 500000
+        // --- 設定値（初期値） ---
+        this.difficulty = 'NORMAL';
+        this.lives = 3;
+        this.extend = 500000;
         
-        // 設定の選択肢定義
+        // --- 選択肢の定義 ---
         this.OPTIONS = {
             difficulty: ['EASY', 'NORMAL', 'HARD', 'VERY HARD'],
             lives: [1, 2, 3, 5],
             extend: [300000, 500000, 1000000, 'NONE']
         };
 
-        this.items = [];
+        this.soundTestIndex = 0;
+        this.bgmTestIndex = 0;
+
+        // --- DOM要素 ---
         this.screenEl = document.getElementById('config-screen');
         this.startScreenEl = document.getElementById('start-screen');
-
-        this.soundTestIndex = 0; // 現在選択されている音
-        this.bgmTestIndex = 0;   // BGMインデックスもここへ
+        this.items = []; // open時に取得
     }
 
-    // 設定画面を開く
+    /** 設定画面を開く */
     open() {
         this.isMode = true;
         this.startScreenEl.style.display = 'none';
         this.screenEl.style.display = 'flex';
-        this.items = document.querySelectorAll('.config-item');
+        
+        // 最新のDOM状態を取得してイベント登録
+        this.items = Array.from(document.querySelectorAll('.config-item'));
         this.setupMouseEvents();
+        
+        // 現在の値に合わせて表示を初期化
+        this.refreshAllDisplay();
         this.updateSelection();
+
         this.game.audio.resetBGM();
     }
 
-    // 設定画面を閉じる
+    /** 設定画面を閉じる */
     close() {
         this.isMode = false;
         this.screenEl.style.display = 'none';
         this.startScreenEl.style.display = 'flex';
+        this.game.audio.resetBGM();
     }
 
-    // キー入力処理
+    /** キー入力処理 */
     handleInput(e) {
         if (!this.isMode) return;
 
-        // 上下移動
-        if (e.code === 'ArrowUp') {
-            this.currentIndex = (this.currentIndex - 1 + this.items.length) % this.items.length;
-            this.updateSelection();
-        } else if (e.code === 'ArrowDown') {
-            this.currentIndex = (this.currentIndex + 1) % this.items.length;
-            this.updateSelection();
+        switch (e.code) {
+            case 'ArrowUp':
+                this.currentIndex = (this.currentIndex - 1 + this.items.length) % this.items.length;
+                this.updateSelection();
+                break;
+            case 'ArrowDown':
+                this.currentIndex = (this.currentIndex + 1) % this.items.length;
+                this.updateSelection();
+                break;
+            case 'ArrowLeft':
+            case 'ArrowRight':
+                this.handleValueChange(e.code === 'ArrowRight');
+                break;
+            case 'KeyZ':
+            case 'Space':
+                this.handleAction();
+                break;
+            case 'KeyC':
+                this.handleCheatCommand();
+                break;
         }
-
-        const currentItem = this.items[this.currentIndex];
-        const setting = currentItem.dataset.setting;
-
-        // 左右（値の変更）
-        if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') {
-            const isRight = e.code === 'ArrowRight';
-            this.changeValue(setting, isRight, currentItem);
-        }
-
-        // 決定（Z / Space）
-        if (e.code === 'KeyZ' || e.code === 'Space') {
-            if (setting === 'sound') {
-                this.playBackSoundTest();
-            } else if (setting === 'bgm') {
-                this.playBackBGMTest();
-            } else if (setting === 'exit') {
-                this.game.audio.resetBGM();
-                this.close();
-            }
-        }
-
-        // デバックモード
-        if (e.code === 'KeyC') {
-                this.debugCCount++;
-                    if (this.debugCCount === 7) {
-                        this.game.isInvincibleCheat = !this.game.isInvincibleCheat;
-                        
-                        // カウントをリセットして、何度でも切り替え可能にする
-                        this.debugCCount = 0;
-
-                        const configUI = document.getElementById('config-screen');
-                        if (this.game.isInvincibleCheat) {
-                            this.game.cheatUsedInSession = true;
-                            // ONの時：ゴールドに光る
-                            this.game.audio.playPowerUp(); 
-                            if (configUI) {
-                                configUI.style.color = "#FFD700";
-                                configUI.style.textShadow = "0 0 10px #FFF";
-                            }
-                            console.log("CHEAT: ON");
-                        } else {
-                            // OFFの時：元の色に戻す
-                            this.game.audio.playExplosion(); // 通常の選択音などで通知
-                            if (configUI) {
-                                configUI.style.color = "";
-                                configUI.style.textShadow = "";
-                            }
-                            console.log("CHEAT: OFF");
-                        }
-                    }
-                }
     }
 
-    // 値を変更する内部メソッド
-    changeValue(setting, isRight, element) {
-        const options = this.OPTIONS[setting];
-        
-        if (options) {
-            let val = this.game.config[setting];
-            let idx = options.indexOf(val);
+    /** 値の変更処理 */
+    handleValueChange(isRight) {
+        const item = this.items[this.currentIndex];
+        const setting = item.dataset.setting;
+
+        if (this.OPTIONS[setting]) {
+            // 通常設定項目 (Difficulty, Lives, Extend)
+            const options = this.OPTIONS[setting];
+            let idx = options.indexOf(this[setting]);
             idx = isRight ? (idx + 1) % options.length : (idx - 1 + options.length) % options.length;
-            this.game.config[setting] = options[idx];
-            element.querySelector('.value').innerText = this.game.config[setting];
+            this[setting] = options[idx];
         } else if (setting === 'sound') {
+            // SEテスト
             const len = this.game.audio.seCount;
-            this.soundTestIndex = isRight ? 
-                (this.soundTestIndex + 1) % len : 
-                (this.soundTestIndex - 1 + len) % len;
-            
-            const seName = this.game.audio.getSEName(this.soundTestIndex);
-            element.querySelector('.value').innerText = `< ${seName} >`;
+            this.soundTestIndex = isRight ? (this.soundTestIndex + 1) % len : (this.soundTestIndex - 1 + len) % len;
         } else if (setting === 'bgm') {
-        const len = this.game.audio.bgmCount;
-        this.bgmTestIndex = isRight ? 
-            (this.bgmTestIndex + 1) % len : 
-            (this.bgmTestIndex - 1 + len) % len;
-        
-        const name = this.game.audio.getBGMName(this.bgmTestIndex);
-        element.querySelector('.value').innerText = `< ${name} >`;        
+            // BGMテスト
+            const len = this.game.audio.bgmCount;
+            this.bgmTestIndex = isRight ? (this.bgmTestIndex + 1) % len : (this.bgmTestIndex - 1 + len) % len;
+        }
+
+        this.refreshDisplay(item);
+    }
+
+    /** 決定ボタン（Z/Space/Click）時のアクション */
+    handleAction() {
+        const setting = this.items[this.currentIndex].dataset.setting;
+
+        if (setting === 'sound') this.playBackSoundTest();
+        if (setting === 'bgm') this.playBackBGMTest();
+        if (setting === 'exit') { this.saveConfig(); this.close(); }
+    }
+
+    /** チートコマンド（Cキー7回） */
+    handleCheatCommand() {
+        this.debugCCount++;
+        if (this.debugCCount < 7) return;
+
+        this.debugCCount = 0; // カウントリセット
+        this.game.isInvincibleCheat = !this.game.isInvincibleCheat;
+
+        if (this.game.isInvincibleCheat) {
+            this.game.cheatUsedInSession = true;
+            this.game.audio.playPowerUp();
+            this.screenEl.style.color = "#FFD700";
+            this.screenEl.style.textShadow = "0 0 10px #FFF";
+            console.log("CHEAT: ENABLED (Invincible)");
+        } else {
+            this.game.audio.playExplosion();
+            this.screenEl.style.color = "";
+            this.screenEl.style.textShadow = "";
+            console.log("CHEAT: DISABLED");
         }
     }
 
-    // 選択状態（activeクラス）の更新
+    /** 表示の全更新 */
+    refreshAllDisplay() {
+        this.items.forEach(item => this.refreshDisplay(item));
+    }
+
+    /** 特定項目の表示更新 */
+    refreshDisplay(item) {
+        const setting = item.dataset.setting;
+        const valEl = item.querySelector('.value');
+        if (!valEl) return;
+
+        if (this.OPTIONS[setting]) {
+            valEl.innerText = this[setting];
+        } else if (setting === 'sound') {
+            valEl.innerText = `< ${this.game.audio.getSEName(this.soundTestIndex)} >`;
+        } else if (setting === 'bgm') {
+            valEl.innerText = `< ${this.game.audio.getBGMName(this.bgmTestIndex)} >`;
+        }
+    }
+
+    /** 選択枠の更新 */
     updateSelection() {
         this.items.forEach((item, index) => {
             item.classList.toggle('active', index === this.currentIndex);
         });
     }
 
-    // マウスイベントの登録
+    /** マウスイベントの登録 */
     setupMouseEvents() {
         this.items.forEach((item, index) => {
-            // 重複登録を避けるため一度削除して追加（または一度きりの登録にする）
+            // クリックで値変更 or アクション
             item.onclick = (e) => {
                 e.stopPropagation();
-                const setting = item.dataset.setting;
-                if (setting === 'exit') {
-                    this.game.audio.resetBGM();
-                    this.close();
+                this.currentIndex = index;
+                this.updateSelection();
+                
+                if (item.dataset.setting === 'exit') {
+                    this.saveConfig();
+                    this.handleAction();
                 } else {
-                    this.changeValue(setting, true, item);
-                    if (setting === 'sound') this.playBackSoundTest();
-                    if (setting === 'bgm') this.playBackBGMTest();
+                    this.handleValueChange(true); // 右クリック扱いで値を回す
+                    this.handleAction(); // 音鳴らしなど
                 }
             };
+
+            // ホバーで選択枠移動
             item.onmouseenter = () => {
                 this.currentIndex = index;
                 this.updateSelection();
             };
         });
     }
-    // サウンドテスト実行
-    playBackSoundTest() {
-        this.game.audio.playSEByIndex(this.soundTestIndex);
+
+    // --- オーディオ実行ヘルパー ---
+    playBackSoundTest() { this.game.audio.playSEByIndex(this.soundTestIndex); }
+    playBackBGMTest() { this.game.audio.playBGMByIndex(this.bgmTestIndex); }
+
+    // 保存用メソッド
+    saveConfig() {
+        const configData = {
+            difficulty: this.difficulty,
+            lives: this.lives,
+            extend: this.extend
+        };
+        localStorage.setItem('void_circuit_config', JSON.stringify(configData));
     }
 
-    // BGMテスト実行
-    playBackBGMTest() {
-        this.game.audio.playBGMByIndex(this.bgmTestIndex);
+    // 読み込み用メソッド
+    loadConfig() {
+        const saved = localStorage.getItem('void_circuit_config');
+        if (saved) {
+            const data = JSON.parse(saved);
+            this.difficulty = data.difficulty || 'NORMAL';
+            this.lives = data.lives || 3;
+            this.extend = data.extend || 500000;
+            this.refreshAllDisplay(); // メニューの表示を同期
+        }
     }
 }

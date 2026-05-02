@@ -141,6 +141,20 @@ canvas {
     50% { opacity: 0.3; }
 }
 
+.new-record {
+    display: inline-block;
+    color: #FF0 !important; /* 鮮やかなイエロー */
+    font-size: 14px;
+    text-shadow: 0 0 8px #FFF;
+    animation: blink-fast 0.4s infinite; /* 高速点滅 */
+    margin-top: 10px;
+}
+
+@keyframes blink-fast {
+    0%, 100% { opacity: 1;  }
+    50% { opacity: 0.7;  }
+}
+
 /* コンフィグ */
 #config-screen {
     background: #000088;

@@ -1,14 +1,29 @@
 /**
- * 弾クラス（自機用）
+ * 全エンティティの基底クラス
  */
-class Bullet {
-    constructor(x, y) {
+class Entity {
+    constructor(x, y, width, height) {
         this.x = x;
         this.y = y;
-        this.width = 4;
-        this.height = 12;
-        this.speed = 8;
+        this.width = width;
+        this.height = height;
         this.active = true;
+    }
+
+    // 画面外判定（上下左右の余白指定可能）
+    isOutOfBounds(cw = 320, ch = 480, margin = 50) {
+        return (this.y > ch + margin || this.y < -margin || 
+                this.x > cw + margin || this.x < -margin);
+    }
+}
+
+/**
+ * 弾クラス（自機用）
+ */
+class Bullet extends Entity {
+    constructor(x, y) {
+        super(x, y, 4, 12);
+        this.speed = 8;
     }
     update() {
         this.y -= this.speed;
@@ -23,22 +38,16 @@ class Bullet {
 /**
  * 敵の弾クラス
  */
-class EnemyBullet {
+class EnemyBullet extends Entity {
     constructor(x, y, vx, vy) {
-        this.x = x;
-        this.y = y;
+        super(x, y, 6, 6);
         this.vx = vx;
         this.vy = vy;
-        this.width = 6;
-        this.height = 6;
-        this.active = true;
     }
     update() {
         this.x += this.vx;
         this.y += this.vy;
-        if (this.y > 500 || this.y < -50 || this.x > 350 || this.x < -50) {
-            this.active = false;
-        }
+        if (this.isOutOfBounds()) this.active = false;
     }
     draw(ctx) {
         ctx.fillStyle = '#F0F';
@@ -51,17 +60,13 @@ class EnemyBullet {
 /**
  * 敵クラス（基本形）
  */
-class Enemy {
+class Enemy extends Entity {
     constructor(assetBase, x, y, bulletType, hp = 1) {
-        this.x = x;
-        this.y = y;
+        super(x, y, 32, 32);
         this.bulletType = bulletType || 'aim';
-        this.width = 32;
-        this.height = 32;
         this.speed = 2;
         this.hp = hp;
         this.maxHp = hp;
-        this.active = true;
         this.shootTimer = Math.random() * 60;
         this.baseShootInterval = 120; 
         this.fireRateMultiplier = 1.0;
@@ -83,41 +88,35 @@ class Enemy {
             if (this.shootTimer >= currentInterval) {
                 this.shoot(game);
                 this.shootTimer = 0;
-            }        }
+            }
+        }
     }
 
     shoot(game) {
         const bx = this.x + this.width / 2;
         const by = this.y + this.height;
-        const dx = (game.player.x + 16) - bx;
-        const dy = (game.player.y + 16) - by;
-        const baseAngle = Math.atan2(dy, dx);
+        const targetX = game.player.x + 16;
+        const targetY = game.player.y + 16;
+        const angle = Math.atan2(targetY - by, targetX - bx);
+
+        const spawn = (vx, vy) => game.entities.push(new EnemyBullet(bx, by, vx, vy));
 
         switch (this.bulletType) {
             case 'straight':
-                game.entities.push(new EnemyBullet(bx, by, 0, 4));
+                spawn(0, 4);
                 break;
             case 'triple':
-                [-0.3, 0, 0.3].forEach(offset => {
-                    game.entities.push(new EnemyBullet(bx, by, Math.cos(baseAngle + offset) * 3, Math.sin(baseAngle + offset) * 3));
-                });
+                [-0.3, 0, 0.3].forEach(off => spawn(Math.cos(angle + off) * 3, Math.sin(angle + off) * 3));
                 break;
             case 'eight-way':
                 for (let i = 0; i < 8; i++) {
-                    // 360度(2*PI)を8分割した角度を計算
-                    const angle = (Math.PI * 2 / 8) * i; 
-                    const speed = 3;
-                    game.entities.push(new EnemyBullet(
-                        bx, 
-                        by, 
-                        Math.cos(angle) * speed, 
-                        Math.sin(angle) * speed
-                    ));
+                    const a = (Math.PI * 2 / 8) * i;
+                    spawn(Math.cos(a) * 3, Math.sin(a) * 3);
                 }
                 break;
             case 'aim':
             default:
-                game.entities.push(new EnemyBullet(bx, by, Math.cos(baseAngle) * 4, Math.sin(baseAngle) * 4));
+                spawn(Math.cos(angle) * 4, Math.sin(angle) * 4);
                 break;
         }
     }
@@ -132,22 +131,16 @@ class Enemy {
     }
 
     draw(ctx) {
-        if (this.isLoaded) {
-            ctx.save();
-            // 画面上部は無敵のため
-            if (this.y < 20) {
-                ctx.globalAlpha = 0.5;
-            } else {
-                ctx.globalAlpha = 1.0;
-            }            
-            ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
-            ctx.restore();
-        }
+        if (!this.isLoaded) return;
+        ctx.save();
+        ctx.globalAlpha = (this.y < 20) ? 0.5 : 1.0;
+        ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+        ctx.restore();
     }
 }
 
 /**
- * サインカーブ移動する敵
+ * 各種派生敵クラス
  */
 class SineEnemy extends Enemy {
     constructor(assetBase, x, y, bulletType, phase = 0) {
@@ -164,16 +157,13 @@ class SineEnemy extends Enemy {
     }
 }
 
-/**
- * とどまる敵
- */
 class StationaryEnemy extends Enemy {
     constructor(assetBase, x, y, bulletType, hp = 1, stopY = 100, waitTime = 120) {
         super(assetBase, x, y, bulletType, hp);
-        this.stopY = stopY;       // 停止するY座標
-        this.waitTime = waitTime; // 停止するフレーム数（60 = 約1秒）
-        this.timer = 0;           // 経過時間計測用
-        this.state = 'MOVE_IN';   // 状態管理: MOVE_IN, STOP, MOVE_OUT
+        this.stopY = stopY;
+        this.waitTime = waitTime;
+        this.timer = 0;
+        this.state = 'MOVE_IN';
     }
 
     update(game) {
@@ -181,55 +171,38 @@ class StationaryEnemy extends Enemy {
 
         switch (this.state) {
             case 'MOVE_IN':
-                // 目標地点まで下降
                 this.y += 2;
-                if (this.y >= this.stopY) {
-                    this.state = 'STOP';
-                }
+                if (this.y >= this.stopY) this.state = 'STOP';
                 break;
 
             case 'STOP':
-                // 停止して攻撃
                 this.timer++;
-
                 if (!this.baseX) this.baseX = this.x; 
-                this.x = this.baseX + Math.sin(this.timer * 0.2) * 2; // 2px幅で揺れる
+                this.x = this.baseX + Math.sin(this.timer * 0.2) * 2;
 
-                // 停止中、一定間隔で弾を撃つ（例：30フレームごと）
                 const interval = Math.max(10, 30 / this.fireRateMultiplier);
-                if (this.timer % Math.floor(interval) === 0) {
-                    this.shoot(game);
-                }
+                if (this.timer % Math.floor(interval) === 0) this.shoot(game);
 
-                // 待ち時間を過ぎたら撤退モードへ
-                if (this.timer >= this.waitTime) {
-                    this.state = 'MOVE_OUT';
-                }
+                if (this.timer >= this.waitTime) this.state = 'MOVE_OUT';
                 break;
 
             case 'MOVE_OUT':
-                // 上（または画面外）へ去っていく
                 this.y -= 3;
-                if (this.y < -50) {
-                    this.active = false; // 画面外に出たら消去
-                }
+                if (this.y < -50) this.active = false;
                 break;
         }
     }
 }
 
 /**
- * 自機クラス（半身出し＆バウンド処理搭載）
+ * 自機クラス
  */
-class Player {
+class Player extends Entity {
     constructor(assetBase, x, y) {
-        this.x = x;
-        this.y = y;
-        this.width = 32;
-        this.height = 32;
+        super(x, y, 32, 32);
         this.speed = 5;
         this.alive = true;
-        this.invincibleTimer = 0; // 無敵残りフレーム
+        this.invincibleTimer = 0;
 
         this.image = new Image();
         this.image.crossOrigin = "anonymous";
@@ -240,68 +213,63 @@ class Player {
 
     update(input, cw, ch) {
         if (!this.alive) return;
+        if (this.invincibleTimer > 0) this.invincibleTimer--;
 
-        if (this.invincibleTimer > 0) {
-            this.invincibleTimer--;
-        }
-        // キーボード移動
+        // キーボード操作
         if (input.isPressed('ArrowUp') && this.y > 0) this.y -= this.speed;
         if (input.isPressed('ArrowDown') && this.y < ch - this.height) this.y += this.speed;
         if (input.isPressed('ArrowLeft') && this.x > 0) this.x -= this.speed;
         if (input.isPressed('ArrowRight') && this.x < cw - this.width) this.x += this.speed;
 
-        // タッチ移動（半身出しバウンド）
+        // タッチ操作（バウンド慣性付き）
         if (input.isTouching && input.touchX !== null) {
-            const targetX = input.touchX - this.width / 2;
-            const targetY = input.touchY - this.height / 2;
-
-            let vx = (targetX - this.x) * 0.2;
-            let vy = (targetY - this.y) * 0.2;
-            this.x += vx;
-            this.y += vy;
-
-            const bounce = 0.6;
-            const minX = -this.width / 2, maxX = cw - this.width / 2;
-            const minY = -this.height / 2, maxY = ch - this.height / 2;
-
-            if (this.x < minX) { this.x = minX; this.x += Math.abs(vx) * bounce; }
-            else if (this.x > maxX) { this.x = maxX; this.x -= Math.abs(vx) * bounce; }
-            if (this.y < minY) { this.y = minY; this.y += Math.abs(vy) * bounce; }
-            else if (this.y > maxY) { this.y = maxY; this.y -= Math.abs(vy) * bounce; }
+            this.handleTouchMove(input.touchX, input.touchY, cw, ch);
         }
+    }
+
+    handleTouchMove(tx, ty, cw, ch) {
+        const targetX = tx - this.width / 2;
+        const targetY = ty - this.height / 2;
+        let vx = (targetX - this.x) * 0.2;
+        let vy = (targetY - this.y) * 0.2;
+        
+        this.x += vx;
+        this.y += vy;
+
+        const bounce = 0.6;
+        const limitX = cw - this.width / 2, limitY = ch - this.height / 2;
+        const minPos = -this.width / 2;
+
+        if (this.x < minPos) { this.x = minPos; this.x += Math.abs(vx) * bounce; }
+        else if (this.x > limitX) { this.x = limitX; this.x -= Math.abs(vx) * bounce; }
+        if (this.y < minPos) { this.y = minPos; this.y += Math.abs(vy) * bounce; }
+        else if (this.y > limitY) { this.y = limitY; this.y -= Math.abs(vy) * bounce; }
     }
 
     draw(ctx) {
         if (!this.alive) return;
-        // 無敵時間中の点滅処理
-        if (this.invincibleTimer > 0) {
-            if (Math.floor(this.invincibleTimer / 5) % 2 === 0) {
-                return; // ここで描画をスキップ
-            }
+        // 点滅
+        if (this.invincibleTimer > 0 && Math.floor(this.invincibleTimer / 5) % 2 === 0) return;
+
+        if (this.isLoaded) {
+            ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+        } else {
+            ctx.fillStyle = '#0FF';
+            ctx.fillRect(this.x, this.y, this.width, this.height);
         }
-        if (this.isLoaded) ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
-        else { ctx.fillStyle = '#0FF'; ctx.fillRect(this.x, this.y, this.width, this.height); }
     }
 
-    setInvincible(frames) {
-        this.invincibleTimer = frames;
-    }
-
-    get isInvincible() {
-        return this.invincibleTimer > 0;
-    }
+    setInvincible(frames) { this.invincibleTimer = frames; }
+    get isInvincible() { return this.invincibleTimer > 0; }
 }
 
 /**
- * 爆発パーティクル
+ * 演出用パーティクル
  */
-class Particle {
+class Particle extends Entity {
     constructor(x, y, type = 'enemy') {
-        this.x = x;
-        this.y = y;
+        super(x, y, 2, 2);
         this.type = type;
-        this.active = true;
-
         const angle = Math.random() * Math.PI * 2;
         const speed = (type === 'player') ? Math.random() * 8 + 2 : Math.random() * 6;
         this.vx = Math.cos(angle) * speed;
@@ -323,32 +291,27 @@ class Particle {
 
     draw(ctx) {
         const ratio = this.life / this.maxLife;
+        ctx.save();
         
         if (this.type === 'player') {
-            // 自機：赤〜オレンジの円形爆発
             ctx.fillStyle = `rgba(255, ${Math.floor(255 * ratio)}, ${Math.floor(100 * ratio)}, ${ratio})`;
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
             ctx.fill();
         } 
         else if (this.type === 'boss') {
-            // ★ 強敵用：青白い光（シアン）から白へ変化し、光り輝く（グロー効果）
-            ctx.save();
-            ctx.shadowBlur = 10 * ratio; // 粒子の周りを光らせる
+            ctx.shadowBlur = 10 * ratio;
             ctx.shadowColor = '#0FF';
             ctx.fillStyle = `rgba(${Math.floor(100 + 155 * (1 - ratio))}, 255, 255, ${ratio})`;
-            
-            // 少し回転させて菱形に描画するとさらにカッコいいです
             ctx.translate(this.x, this.y);
             ctx.rotate(Math.PI / 4);
             ctx.fillRect(-this.size / 2, -this.size / 2, this.size * 1.5, this.size * 1.5);
-            ctx.restore();
         } 
         else {
-            // 通常の敵：黄色いスクエア粒子
             ctx.fillStyle = `rgba(255, 255, 100, ${ratio})`;
             ctx.fillRect(this.x, this.y, this.size, this.size);
         }
         
-}
+        ctx.restore();
+    }
 }

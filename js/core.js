@@ -1,106 +1,111 @@
 /**
- * 入力管理：キーボードとタッチの両方に対応
+ * 入力管理：キーボード、マウス、タッチを統合
  */
 class InputManager {
     constructor(canvas) {
+        this.canvas = canvas;
         this.keys = {};
         this.touchX = null;
         this.touchY = null;
         this.isTouching = false;
 
+        this.setupEventListeners();
+    }
+
+    setupEventListeners() {
         // キーボード
         window.addEventListener('keydown', (e) => this.keys[e.code] = true);
         window.addEventListener('keyup', (e) => this.keys[e.code] = false);
 
-        // タッチ / マウス共通処理
-        const handleTouch = (e) => {
-            if (!canvas) return; // キャンバスがない時は無視
-            const rect = canvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            this.touchX = (clientX - rect.left) * (canvas.width / rect.width);
-            this.touchY = (clientY - rect.top) * (canvas.height / rect.height);
-        };
+        // マウス/タッチ共通：座標計算をメソッド化
+        const updatePos = (e) => this.handleCoordinate(e);
 
-        canvas.addEventListener('mousedown', (e) => { this.isTouching = true; handleTouch(e); });
-        window.addEventListener('mousemove', (e) => { if (this.isTouching) handleTouch(e); });
+        // マウス
+        this.canvas.addEventListener('mousedown', (e) => { this.isTouching = true; updatePos(e); });
+        window.addEventListener('mousemove', (e) => { if (this.isTouching) updatePos(e); });
         window.addEventListener('mouseup', () => { this.isTouching = false; });
 
-        canvas.addEventListener('touchstart', (e) => { 
-            this.isTouching = true; 
-            handleTouch(e); 
-            if(e.cancelable) e.preventDefault(); 
-        }, {passive: false});
-        canvas.addEventListener('touchmove', (e) => { 
-            handleTouch(e); 
-            if(e.cancelable) e.preventDefault(); 
-        }, {passive: false});
-        canvas.addEventListener('touchend', () => { this.isTouching = false; });
+        // タッチ
+        this.canvas.addEventListener('touchstart', (e) => {
+            this.isTouching = true;
+            updatePos(e);
+            if (e.cancelable) e.preventDefault();
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchmove', (e) => {
+            updatePos(e);
+            if (e.cancelable) e.preventDefault();
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchend', () => { this.isTouching = false; });
     }
+
+    handleCoordinate(e) {
+        if (!this.canvas) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        // スケーリングを考慮した座標変換
+        this.touchX = (clientX - rect.left) * (this.canvas.width / rect.width);
+        this.touchY = (clientY - rect.top) * (this.canvas.height / rect.height);
+    }
+
     isPressed(keyCode) { return !!this.keys[keyCode]; }
 }
 
 /**
- * オーディオ管理
+ * オーディオ管理：BGMとSEのライフサイクルを制御
  */
 class AudioManager {
     constructor(assetBase) {
         this.assetBase = assetBase;
-        this.bgm = null;
+        this.currentBgm = null;
         this.sounds = {};
-        this.bgms = {}; // BGM用のコンテナ
-        this.seKeys = [];
-        this.bgmKeys = []; // BGMのキーリスト
+        this.bgms = {};
+        
+        // 設定定義（ここを増やすだけで自動ロードされる）
+        this.CONFIG = {
+            BGM: { 'stage1': 'bgm-stage1.mp3' },
+            SE: {
+                shot:      { file: 'shot.wav',      vol: 0.3 },
+                explosion: { file: 'explosion.wav', vol: 0.3 },
+                hitHurt:   { file: 'hitHurt.wav',   vol: 0.5 },
+                powerUp:   { file: 'powerUp.wav',   vol: 0.7 }
+            }
+        };
+
+        this.bgmKeys = Object.keys(this.CONFIG.BGM);
+        this.seKeys = Object.keys(this.CONFIG.SE);
     }
 
     initAudio() {
-        // BGMの設定
-        const bgmFiles = {
-            'stage1': 'bgm-stage1.mp3'
-        };
-        const soundVolumes = {
-            shot: 0.3,
-            explosion: 0.3,
-            hitHurt: 0.5,
-            powerUp: 0.7
-            // 今後新しいSEが増えても、ここに追加するだけでOK
-        };
-
-        Object.keys(bgmFiles).forEach(key => {
-            const audio = new Audio();
+        // BGMロード
+        this.bgmKeys.forEach(key => {
+            const audio = new Audio(this.assetBase + this.CONFIG.BGM[key]);
             audio.crossOrigin = "anonymous";
-            audio.src = this.assetBase + bgmFiles[key];
             audio.loop = true;
             audio.volume = 0.7;
             this.bgms[key] = audio;
         });
-        this.bgmKeys = Object.keys(this.bgms);
-        
-        // SEの設定
-        this.sounds = {
-            shot: new Audio(),
-            explosion: new Audio(),
-            hitHurt: new Audio(),
-            powerUp: new Audio()
-        };
 
-        Object.keys(this.sounds).forEach(key => {
-            const s = this.sounds[key];
-            s.crossOrigin = "anonymous";
-            s.src = this.assetBase + `${key}.wav`;
-            
-            // 設定があればそれを使い、なければデフォルト（0.5）にする
-            s.volume = soundVolumes[key] !== undefined ? soundVolumes[key] : 0.5;
-        });        
-
-        this.seKeys = Object.keys(this.sounds);
+        // SEロード
+        this.seKeys.forEach(key => {
+            const conf = this.CONFIG.SE[key];
+            const audio = new Audio(this.assetBase + conf.file);
+            audio.crossOrigin = "anonymous";
+            audio.volume = conf.vol;
+            this.sounds[key] = audio;
+        });
     }
 
+    /** BGM再生 */
     playBGM(key) {
         this.stopAllBGM();
         this.currentBgm = this.bgms[key];
         if (this.currentBgm) {
             this.currentBgm.currentTime = 0;
+            this.currentBgm.volume = 0.7; // フェード後などを考慮してリセット
             this.currentBgm.play().catch(() => {});
         }
     }
@@ -108,58 +113,37 @@ class AudioManager {
     stopAllBGM() {
         Object.values(this.bgms).forEach(b => {
             b.pause();
-        });
-    }
-
-    // --- サウンドテスト用：BGMをインデックスで再生 ---
-    playBGMByIndex(index) {
-        const key = this.bgmKeys[index];
-        this.playBGM(key);
-    }
-
-    get bgmCount() { return this.bgmKeys.length; }
-    getBGMName(index) { return this.bgmKeys[index] ? this.bgmKeys[index].toUpperCase() : "NONE"; }
-
-    // フェードアウト
-    fadeOutBGM(duration = 2000) {
-        // currentBgm（今鳴っている曲）がなければ何もしない
-        if (!this.currentBgm) return;
-
-        const targetBgm = this.currentBgm; // 途中で曲が変わっても大丈夫なように保持
-        const startVolume = targetBgm.volume;
-        const step = startVolume / (duration / 50);
-
-        const interval = setInterval(() => {
-            if (targetBgm.volume > step) {
-                targetBgm.volume -= step;
-            } else {
-                targetBgm.volume = 0;
-                targetBgm.pause();
-                clearInterval(interval);
-                // フェードアウトが終わったら現在のBGM参照をクリア
-                if (this.currentBgm === targetBgm) this.currentBgm = null;
-            }
-        }, 50);
-    }
-
-    // リセット
-    resetBGM() {
-        // 全てのBGMを停止して音量を戻しておく
-        Object.values(this.bgms).forEach(b => {
-            b.pause();
             b.currentTime = 0;
-            b.volume = 0.7; // initAudioで設定したデフォルト値
         });
+    }
+
+    resetBGM() {
+        this.stopAllBGM();
         this.currentBgm = null;
     }
 
-    // SE再生
-    playShot() { this._playSound('shot'); }
-    playExplosion() { this._playSound('explosion'); }
-    playHitSound(){ this._playSound('hitHurt'); }
-    playPowerUp(){ this._playSound('powerUp'); }
+    fadeOutBGM(duration = 2000) {
+        if (!this.currentBgm) return;
 
-    _playSound(key) {
+        const target = this.currentBgm;
+        const startVol = target.volume;
+        const intervalTime = 50;
+        const steps = duration / intervalTime;
+        const volStep = startVol / steps;
+
+        const timer = setInterval(() => {
+            if (target.volume > volStep) {
+                target.volume -= volStep;
+            } else {
+                target.volume = 0;
+                target.pause();
+                clearInterval(timer);
+            }
+        }, intervalTime);
+    }
+
+    /** SE再生 */
+    _playSE(key) {
         const s = this.sounds[key];
         if (s) {
             s.currentTime = 0;
@@ -167,54 +151,61 @@ class AudioManager {
         }
     }
 
-    playSEByIndex(index) {
-        const key = this.seKeys[index];
-        if (key) {
-            this._playSound(key);
-        }
-    }
+    // ショートカットメソッド
+    playShot() { this._playSE('shot'); }
+    playExplosion() { this._playSE('explosion'); }
+    playHitSound() { this._playSE('hitHurt'); }
+    playPowerUp() { this._playSE('powerUp'); }
 
-    get seCount() {
-        return this.seKeys.length;
-    }
-    getSEName(index) {
-        return this.seKeys[index] ? this.seKeys[index].toUpperCase() : "NONE";
-    }
+    // サウンドテスト用
+    playBGMByIndex(idx) { this.playBGM(this.bgmKeys[idx]); }
+    playSEByIndex(idx) { this._playSE(this.seKeys[idx]); }
+
+    get bgmCount() { return this.bgmKeys.length; }
+    get seCount() { return this.seKeys.length; }
+    getBGMName(idx) { return this.bgmKeys[idx]?.toUpperCase() || "NONE"; }
+    getSEName(idx) { return this.seKeys[idx]?.toUpperCase() || "NONE"; }
 }
 
 /**
- * 背景：星が流れるエフェクト
+ * 背景：多重スクロールする星屑
  */
 class Starfield {
     constructor(width, height) {
         this.width = width;
         this.height = height;
-        this.starsLayer1 = this.createStars(40, 1);
-        this.starsLayer2 = this.createStars(20, 3);
-    }
-    createStars(count, speed) {
-        const stars = [];
-        for (let i = 0; i < count; i++) {
-            stars.push({ 
-                x: Math.random() * this.width, 
-                y: Math.random() * this.height, 
-                speed: speed + (Math.random() * 0.5) 
-            });
-        }
-        return stars;
-    }
-    update() {
-        const move = (stars) => stars.forEach(s => { 
-            s.y += s.speed; 
-            if (s.y > this.height) s.y = -2; 
+        // Layer1: 遠くの星（遅い・小さい）、Layer2: 近くの星（速い・大きい）
+        this.layers = [
+            { count: 40, size: 1, speed: 1.0, color: '#888', stars: [] },
+            { count: 20, size: 2, speed: 3.0, color: '#FFF', stars: [] }
+        ];
+        
+        this.layers.forEach(layer => {
+            for (let i = 0; i < layer.count; i++) {
+                layer.stars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    s: layer.speed + (Math.random() * 0.5)
+                });
+            }
         });
-        move(this.starsLayer1);
-        move(this.starsLayer2);
     }
+
+    update() {
+        this.layers.forEach(layer => {
+            layer.stars.forEach(s => {
+                s.y += s.s;
+                if (s.y > this.height) s.y = -layer.size;
+            });
+        });
+    }
+
     draw(ctx) {
-        ctx.fillStyle = '#888'; 
-        this.starsLayer1.forEach(s => ctx.fillRect(s.x, s.y, 1, 1));
-        ctx.fillStyle = '#FFF'; 
-        this.starsLayer2.forEach(s => ctx.fillRect(s.x, s.y, 2, 2));
+        this.layers.forEach(layer => {
+            ctx.fillStyle = layer.color;
+            layer.stars.forEach(s => {
+                ctx.fillRect(s.x, s.y, layer.size, layer.size);
+            });
+        });
     }
 }
