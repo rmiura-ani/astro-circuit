@@ -1,3 +1,13 @@
+/*
+ * PROJECT: VOID-CIRCUIT
+ *
+ * util.js
+ * 
+ * Copyright (c) 2026 あに。部長 / Ryo Miura
+ * Licensed under the MIT License (see LICENSE file)
+ * Note: Included assets are the property of their respective owners.
+ */
+
 /**
  * シナリオ管理：フレーム数に応じて敵を生成・制御する
  */

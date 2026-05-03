@@ -1,3 +1,13 @@
+/*
+ * PROJECT: VOID-CIRCUIT
+ *
+ * entities.js
+ * 
+ * Copyright (c) 2026 あに。部長 / Ryo Miura
+ * Licensed under the MIT License (see LICENSE file)
+ * Note: Included assets are the property of their respective owners.
+ */
+
 /**
  * 全エンティティの基底クラス
  */
@@ -25,10 +35,12 @@ class Bullet extends Entity {
         super(x, y, 4, 12);
         this.speed = 8;
     }
+    /** 自機弾の移動更新と画面外判定 */
     update() {
         this.y -= this.speed;
         if (this.y < -20) this.active = false;
     }
+    /** 弾を描画する */
     draw(ctx) {
         ctx.fillStyle = '#FF0';
         ctx.fillRect(this.x, this.y, this.width, this.height);
@@ -44,11 +56,13 @@ class EnemyBullet extends Entity {
         this.vx = vx;
         this.vy = vy;
     }
+    /** 敵弾の移動更新と画面外判定 */
     update() {
         this.x += this.vx;
         this.y += this.vy;
         if (this.isOutOfBounds()) this.active = false;
     }
+    /** 敵弾を描画する */
     draw(ctx) {
         ctx.fillStyle = '#F0F';
         ctx.beginPath();
@@ -78,6 +92,7 @@ class Enemy extends Entity {
         this.image.onload = () => this.isLoaded = true;
     }
 
+    /** 敵の移動と攻撃を管理する */
     update(game) {
         this.y += this.speed;
         if (this.y > 480) this.active = false;
@@ -92,6 +107,7 @@ class Enemy extends Entity {
         }
     }
 
+    /** 指定の弾種で弾を発射する */
     shoot(game) {
         const bx = this.x + this.width / 2;
         const by = this.y + this.height;
@@ -121,6 +137,7 @@ class Enemy extends Entity {
         }
     }
 
+    /** ダメージを受けたときの状態を更新する */
     takeDamage(amount) {
         this.hp -= amount;
         if (this.hp <= 0) {
@@ -130,6 +147,7 @@ class Enemy extends Entity {
         return false;
     }
 
+    /** 敵を描画する */
     draw(ctx) {
         if (!this.isLoaded) return;
         ctx.save();
@@ -150,6 +168,7 @@ class SineEnemy extends Enemy {
         this.amplitude = 50;
         this.frequency = 0.05;
     }
+    /** サイン波移動を加算して敵の位置を更新する */
     update(game) {
         super.update(game);
         this.x = this.baseX + Math.sin(this.phase) * this.amplitude;
@@ -166,6 +185,7 @@ class StationaryEnemy extends Enemy {
         this.state = 'MOVE_IN';
     }
 
+    /** 停止・発射・退却を管理する敵の状態更新 */
     update(game) {
         if (!this.active) return;
 
@@ -211,6 +231,7 @@ class Player extends Entity {
         this.image.onload = () => this.isLoaded = true;
     }
 
+    /** プレイヤーの入力と状態に応じて位置を更新する */
     update(input, cw, ch) {
         if (!this.alive) return;
         if (this.invincibleTimer > 0) this.invincibleTimer--;
@@ -227,6 +248,7 @@ class Player extends Entity {
         }
     }
 
+    /** タッチ入力時の慣性付き移動を計算する */
     handleTouchMove(tx, ty, cw, ch) {
         const targetX = tx - this.width / 2;
         const targetY = ty - this.height / 2;
@@ -246,8 +268,8 @@ class Player extends Entity {
         else if (this.y > limitY) { this.y = limitY; this.y -= Math.abs(vy) * bounce; }
     }
 
+    /** プレイヤーを描画する（無敵状態では点滅する） */
     draw(ctx) {
-        if (!this.alive) return;
         // 点滅
         if (this.invincibleTimer > 0 && Math.floor(this.invincibleTimer / 5) % 2 === 0) return;
 
@@ -289,6 +311,7 @@ class Particle extends Entity {
         if (this.life <= 0) this.active = false;
     }
 
+    /** パーティクルを描画する */
     draw(ctx) {
         const ratio = this.life / this.maxLife;
         ctx.save();

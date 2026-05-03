@@ -1,3 +1,13 @@
+/*
+ * PROJECT: VOID-CIRCUIT
+ *
+ * core.js
+ * 
+ * Copyright (c) 2026 あに。部長 / Ryo Miura
+ * Licensed under the MIT License (see LICENSE file)
+ * Note: Included assets are the property of their respective owners.
+ */
+
 /**
  * 入力管理：キーボード、マウス、タッチを統合
  */
@@ -12,6 +22,7 @@ class InputManager {
         this.setupEventListeners();
     }
 
+    /** イベントリスナーを初期化し、入力をキャプチャする */
     setupEventListeners() {
         // キーボード
         window.addEventListener('keydown', (e) => this.keys[e.code] = true);
@@ -40,6 +51,7 @@ class InputManager {
         this.canvas.addEventListener('touchend', () => { this.isTouching = false; });
     }
 
+    /** 入力座標をキャンバスのローカル座標に変換する */
     handleCoordinate(e) {
         if (!this.canvas) return;
         const rect = this.canvas.getBoundingClientRect();
@@ -51,6 +63,7 @@ class InputManager {
         this.touchY = (clientY - rect.top) * (this.canvas.height / rect.height);
     }
 
+    /** 指定キーが押されているかを判定する */
     isPressed(keyCode) { return !!this.keys[keyCode]; }
 }
 
@@ -79,6 +92,7 @@ class AudioManager {
         this.seKeys = Object.keys(this.CONFIG.SE);
     }
 
+    /** BGM と SE をロードして再生準備を行う */
     initAudio() {
         // BGMロード
         this.bgmKeys.forEach(key => {
@@ -110,6 +124,7 @@ class AudioManager {
         }
     }
 
+    /** すべての BGM を停止して再生位置を先頭に戻す */
     stopAllBGM() {
         Object.values(this.bgms).forEach(b => {
             b.pause();
@@ -117,11 +132,13 @@ class AudioManager {
         });
     }
 
+    /** 再生中の BGM を停止して状態をリセットする */
     resetBGM() {
         this.stopAllBGM();
         this.currentBgm = null;
     }
 
+    /** 再生中の BGM を徐々にフェードアウトする */
     fadeOutBGM(duration = 2000) {
         if (!this.currentBgm) return;
 
@@ -142,7 +159,7 @@ class AudioManager {
         }, intervalTime);
     }
 
-    /** SE再生 */
+    /** 指定の効果音を再生する */
     _playSE(key) {
         const s = this.sounds[key];
         if (s) {

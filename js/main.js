@@ -1,3 +1,14 @@
+/*
+ * PROJECT: VOID-CIRCUIT
+ *
+ * main.js
+ * 
+ * Copyright (c) 2026 あに。部長 / Ryo Miura
+ * Licensed under the MIT License (see LICENSE file)
+ * Note: Included assets are the property of their respective owners.
+ */
+
+
 /**
  * ゲーム全体を統括するメインクラス (v0.25 Refactored)
  */
