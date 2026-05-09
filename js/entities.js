@@ -63,9 +63,10 @@ class Bullet {
  */
 class EnemyBullet extends Entity {
     constructor(x, y, vx, vy) {
-        super(x, y, 6, 6);
+        super(x, y, 4, 4); // 判定は 4x4
         this.vx = vx;
         this.vy = vy;
+        this.renderRadius = 3; // 見た目の半径は 3（直径6）
     }
     /** 敵弾の移動更新と画面外判定 */
     update() {
@@ -77,7 +78,7 @@ class EnemyBullet extends Entity {
     draw(ctx) {
         ctx.fillStyle = '#F0F';
         ctx.beginPath();
-        ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+        ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.renderRadius, 0, Math.PI * 2);
         ctx.fill();
     }
 }
@@ -195,6 +196,7 @@ class SineEnemy extends Enemy {
 class StationaryEnemy extends Enemy {
     constructor(assetBase, x, y, bulletType, hp = 1, stopY = 100, waitTime = 120) {
         super(assetBase, x, y, bulletType, hp);
+        this.baseX = x;
         this.stopY = stopY;
         this.waitTime = waitTime;
         this.timer = 0;
@@ -213,7 +215,6 @@ class StationaryEnemy extends Enemy {
 
             case 'STOP':
                 this.timer++;
-                if (!this.baseX) this.baseX = this.x; 
                 this.x = this.baseX + Math.sin(this.timer * 0.2) * 2;
 
                 const interval = Math.max(10, 30 / this.fireRateMultiplier);

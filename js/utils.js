@@ -13,7 +13,7 @@
  */
 class EnemyManager {
     constructor(scenario) { 
-        this.scenario = scenario; 
+        this.scenario = scenario.sort((a, b) => a.frame - b.frame);
         this.enemySpeedMultiplier = 1.0;
         this.fireRateMultiplier = 1.0;
         this.currentIndex = 0; 

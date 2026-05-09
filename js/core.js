@@ -220,9 +220,11 @@ class Starfield {
     draw(ctx) {
         this.layers.forEach(layer => {
             ctx.fillStyle = layer.color;
+            ctx.beginPath(); // パスを開始して
             layer.stars.forEach(s => {
-                ctx.fillRect(s.x, s.y, layer.size, layer.size);
+                ctx.rect(s.x, s.y, layer.size, layer.size); // 短形をパスに追加
             });
+            ctx.fill(); // 最後に一括で塗りつぶす
         });
     }
 }

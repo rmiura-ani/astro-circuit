@@ -1,47 +1,58 @@
+:root {
+    /* --- LAYER MANAGEMENT (z-index) --- */
+    --z-base: 0;
+    --z-game-canvas: 10;
+    --z-ui-hud: 50;
+    --z-screen-overlay: 100;
+    --z-config-system: 200;
+
+    /* --- COLORS (VOID-CIRCUIT THEME) --- */
+    --color-bg: #111;
+    --color-black: #000;
+    --color-white: #fff;
+    --color-cyan: #0ff;
+    --color-magenta: #f0f;
+    --color-yellow: #ff0;
+    --color-gold: #ffd700;
+    --color-crt-blue: #000088;
+    --color-gray-dark: #444;
+    --color-gray-light: #888;
+}
+
 /* 全体レイアウト */
 body {
     margin: 0;
-    background-color: #111;
+    background-color: var(--color-bg);
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
     overflow: hidden;
-    color: #fff;
+    color: var(--color-white);
     font-family: 'Press Start 2P', cursive;
 }
 
 #game-container {
     container-type: size;
-    
     position: relative;
     width: auto; 
     height: 80vh;
     aspect-ratio: 2 / 3;
-
-    background: #000;
+    background: var(--color-black);
     box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-    overflow: hidden;
-    
     margin: auto; 
     overflow: hidden;
 }
 
 canvas {
-    /* 画面の縦横どちらかのアスペクト比を維持して最大化 */
     width: 100%;
     height: 100%;
     display: block;
-
-    /* ドット絵がぼやけないようにする魔法のプロパティ */
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-
-    /* 中央寄せ */
-    display: block;
     margin: 0 auto;
-
     touch-action: none;
+    z-index: var(--z-game-canvas);
 }
 
 /* UIレイヤー：Canvasの真上に配置 */
@@ -55,43 +66,40 @@ canvas {
     box-sizing: border-box;
     display: flex;
     justify-content: space-between;
-    
     pointer-events: none; 
-    z-index: 50;
+    z-index: var(--z-ui-hud);
 }
 
 #score-display, 
 #hi-score-display {
     font-family: 'Press Start 2P', cursive;
     font-size: 2.5cqw;
-    color: #FFFFFF;
-    text-shadow: 2px 2px 0px #000; /* 文字を読みやすくするための縁取り */
+    color: var(--color-white);
+    text-shadow: 2px 2px 0px var(--color-black);
     line-height: 1;
     white-space: nowrap;
 }
 
 .counter-stop {
-    color: #FFD700 !important;
-    text-shadow: 0 0 5px rgba(255, 215, 0, 0.8); /* ほんのり光らせる */
+    color: var(--color-gold) !important;
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.8);
 }
-
 
 #lives-display {
     position: absolute;
-    top: 25px;      /* スコア表示の下 */
+    top: 25px;
     left: 10px;
-    color: #FFFFFF;
+    color: var(--color-white);
     font-family: 'Press Start 2P', cursive;
-    font-size: 12px; /* 絵文字と数字のバランスを見て調整 */
-    text-shadow: 2px 2px 0px #000; /* 文字をくっきりさせる */
-    pointer-events: none; /* プレイの邪魔にならないように */
-    z-index: 10;
+    font-size: 12px;
+    text-shadow: 2px 2px 0px var(--color-black);
+    pointer-events: none;
 }
 
 /* 残機更新時の強調点滅 */
 .extend-blink {
     animation: extend-blink-effect 0.2s step-end infinite;
-    color: #FF0 !important; /* 点滅中は黄色にする */
+    color: var(--color-yellow) !important;
 }
 
 @keyframes extend-blink-effect {
@@ -101,48 +109,42 @@ canvas {
 
 /* 武器情報全体のコンテナ */
 #weapon-container {
-    display: none; /* 初期状態は隠す */
+    display: none;
     position: absolute;
-    bottom: 15px; /* 画面下からの距離 */
-    right: 15px;  /* 画面右からの距離 */
+    bottom: 15px;
+    right: 15px;
     text-align: right;
     font-family: 'Press Start 2P', cursive;
-    pointer-events: none; /* マウスクリックを透過させてゲーム操作を邪魔しない */
-    z-index: 10; /* 他のUIより手前に */
+    pointer-events: none;
 }
 
-/* ラベル：SYSTEM-LOAD */
 #weapon-label {
     font-size: 7px;
-    color: #444; /* 目立ちすぎないグレー */
+    color: var(--color-gray-dark);
     margin-bottom: 2px;
     letter-spacing: 1px;
 }
 
-/* メイン表示：WEAPON: STRAIGHT */
 #weapon-display {
     font-size: 11px;
-    color: #0ff; /* シアン（STRAIGHT時の基本色） */
+    color: var(--color-cyan);
     text-shadow: 0 0 5px rgba(0, 255, 255, 0.7);
     margin-bottom: 4px;
-    transition: color 0.2s, text-shadow 0.2s; /* 切り替え時の色変化を滑らかに */
+    transition: color 0.2s, text-shadow 0.2s;
 }
 
-/* 操作ヒント：[X] OR CLICK TO CHANGE */
 #weapon-hint {
     font-size: 7px;
     color: rgba(255, 255, 255, 0.4);
     letter-spacing: -0.5px;
-    animation: weapon-blink 2s infinite; /* ゆっくり点滅 */
+    animation: weapon-blink 2s infinite;
 }
 
-/* WIDEモード時の強調色（JSでクラスを付け替える用） */
 #weapon-display.mode-wide {
-    color: #f0f; /* マゼンタ */
+    color: var(--color-magenta);
     text-shadow: 0 0 5px rgba(255, 0, 255, 0.7);
 }
 
-/* ヒントの点滅アニメーション */
 @keyframes weapon-blink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.2; }
@@ -160,7 +162,7 @@ canvas {
     justify-content: center;
     align-items: center;
     background: rgba(0,0,0,0.85);
-    z-index: 60;
+    z-index: var(--z-screen-overlay);
     text-align: center;
     cursor: pointer;
 }
@@ -173,10 +175,10 @@ canvas {
 }
 
 #start-screen h1 {
-    font-size: 18px; /* 24pxから少し小さくして密度を上げる */
+    font-size: 18px;
     line-height: 1.5;
-    color: #0FF;
-    text-shadow: 3px 3px #F0F;
+    color: var(--color-cyan);
+    text-shadow: 3px 3px var(--color-magenta);
     margin: 0;
 }
 
@@ -191,26 +193,26 @@ canvas {
 
 .new-record {
     display: inline-block;
-    color: #FF0 !important; /* 鮮やかなイエロー */
+    color: var(--color-yellow) !important;
     font-size: 14px;
-    text-shadow: 0 0 8px #FFF;
-    animation: blink-fast 0.4s infinite; /* 高速点滅 */
+    text-shadow: 0 0 8px var(--color-white);
+    animation: blink-fast 0.4s infinite;
     margin-top: 10px;
 }
 
 @keyframes blink-fast {
-    0%, 100% { opacity: 1;  }
-    50% { opacity: 0.7;  }
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
 }
 
 /* コンフィグ */
 #config-screen {
-    background: #000088;
-    color: #fff;
-    padding: 20px 15px;     /* 左右の余白を減らして、中央に寄せる */
+    background: var(--color-crt-blue);
+    color: var(--color-white);
+    padding: 20px 15px;
     display: none;
     flex-direction: column;
-    align-items: center; /* 中央揃えにする */
+    align-items: center;
     justify-content: center;
     width: 100%;
     height: 100%;
@@ -218,11 +220,11 @@ canvas {
     top: 0;
     left: 0;
     box-sizing: border-box;
-    z-index: 200; /* 圧倒的に高く設定 */
+    z-index: var(--z-config-system);
 }
 
 #config-menu {
-    width: 90%; /* 少し余裕を持たせる */
+    width: 90%;
     margin-top: 10px;
 }
 
@@ -231,19 +233,19 @@ canvas {
     justify-content: space-between;
     width: 100%;
     margin: 8px 0;
-    font-size: 10px; /* 画面サイズに合わせて調整 */
+    font-size: 10px;
     padding: 5px 8px;
     box-sizing: border-box;
-    white-space: nowrap; /* 折り返しを防止 */
+    white-space: nowrap;
 }
 
 .config-item:hover {
-    background: rgba(255, 255, 255, 0.2); /* マウスが乗ったら少し明るく */
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .config-item.active {
-    background: #fff;
-    color: #000;
+    background: var(--color-white);
+    color: var(--color-black);
 }
 
 .config-item.active .value {
@@ -260,16 +262,17 @@ canvas {
 #credit-screen {
     display: none;
     position: absolute;
-    background: #000;
+    background: var(--color-black);
     font-family: 'DotGothic16', sans-serif;
     box-sizing: border-box;
     text-align: left;
     width: 100%;
     height: 100%;
+    z-index: var(--z-screen-overlay);
 }
 
 #credit-screen h2 {
-    color: #0FF;
+    color: var(--color-cyan);
     font-size: 18px;
     margin-bottom: 30px;
     text-align: center;
@@ -292,13 +295,13 @@ canvas {
 }
 
 .credit-label {
-    color: #888;
+    color: var(--color-gray-light);
     font-size: 14px;
     margin-bottom: 5px;
 }
 
 .credit-name {
-    color: #FFF;
+    color: var(--color-white);
     font-size: 16px;
 }
 
@@ -308,31 +311,25 @@ canvas {
     bottom: 5px;
     right: 10px;
     font-size: 8px;
-    color: #444;
+    color: var(--color-gray-dark);
 }
 
 #share-btn {
     display: none; 
-    margin-top: 80px;      /* 誤操作防止の大きな余白 */
+    margin-top: 80px;
     padding: 12px 24px;
-    
-    /* ★ Xブランドカラー：漆黒と白 */
-    background-color: #000000; 
-    color: #FFFFFF;
-    
-    /* 枠線を白にすると、黒背景のゲーム画面で際立ちます */
-    border: 1px solid #FFFFFF; 
+    background-color: var(--color-black); 
+    color: var(--color-white);
+    border: 1px solid var(--color-white); 
     border-radius: 4px;
-    
     cursor: pointer;
-    font-family: 'Arial Black', sans-serif; /* 少し力強いフォントに */
+    font-family: 'Arial Black', sans-serif;
     font-size: 14px;
     letter-spacing: 1px;
     transition: all 0.3s ease;
 }
 
-/* ホバー時に色を反転させると、操作感が良くなります */
 #share-btn:hover {
-    background-color: #FFFFFF;
-    color: #000000;
+    background-color: var(--color-white);
+    color: var(--color-black);
 }
