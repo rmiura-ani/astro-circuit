@@ -90,6 +90,7 @@ class EnemyManager {
         this.applyEnemyParams(enemy, data);
 
         // 3. ゲームに追加
+        game.stats.enemiesSpawned++;
         game.entities.push(enemy);
     }
 

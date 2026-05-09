@@ -205,6 +205,23 @@ canvas {
     50% { opacity: 0.7; }
 }
 
+.stats-container {
+    margin: 15px 0;
+    padding: 10px;
+    border-top: 1px double var(--color-cyan);
+    border-bottom: 1px double var(--color-cyan);
+    font-size: 10px;
+    text-align: left;
+    line-height: 1.8;
+}
+.stats-row {
+    display: flex;
+    justify-content: space-between;
+    width: 220px;
+}
+.stats-label { color: var(--color-gray-light); }
+.stats-value { color: var(--color-white); }
+
 /* コンフィグ */
 #config-screen {
     background: var(--color-crt-blue);

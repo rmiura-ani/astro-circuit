@@ -19,7 +19,7 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
-        this.version = "0.26";
+        this.version = "0.28";
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
 
         // --- サブシステム ---
@@ -33,7 +33,12 @@ class Game {
         this._score = 0;
         this._lives = this.config.lives;
         this.highScore = parseInt(localStorage.getItem('void_circuit_highscore')) || 0;
-        
+        this.stats = {
+            enemiesSpawned: 0,
+            enemiesKilled: 0,
+            shotsFired: 0,
+            shotsHit: 0
+        };
         this.isRunning = false;
         this.isLoaded = false;
         this.isShowingCredits = false;
@@ -253,6 +258,12 @@ class Game {
         this.frame = 0;
         this.score = 0;
         this.currentLives = this.config.lives;
+        this.stats = {
+                enemiesSpawned: 0,
+                enemiesKilled: 0,
+                shotsFired: 0,
+                shotsHit: 0
+            };
         this.hasExtended = false;
         this.hasCounterStopped = false;
         this.extendThreshold = this.config.extend;
@@ -314,6 +325,7 @@ class Game {
                     // STRAIGHT: 正面に2連装（威力2倍のイメージ）
                     this.entities.push(new Bullet(this.player.x + 8, this.player.y, 0));
                     this.entities.push(new Bullet(this.player.x + 20, this.player.y, 0));
+                    this.stats.shotsFired++;
                     this.audio.playShot();
                 }
             } else {
@@ -322,6 +334,7 @@ class Game {
                     this.entities.push(new Bullet(this.player.x + 14, this.player.y, 0));    // 中央
                     this.entities.push(new Bullet(this.player.x + 14, this.player.y, -3.5)); // 左斜め
                     this.entities.push(new Bullet(this.player.x + 14, this.player.y, 3.5));  // 右斜め
+                    this.stats.shotsFired++;
                     this.audio.playShot();
                 }
             }
@@ -348,7 +361,8 @@ class Game {
             for (const e of this.entities) {
                 if (e instanceof Enemy || e instanceof EnemyBullet) {
                     const dx = px - (e.x + e.width/2), dy = py - (e.y + e.height/2);
-                    if (Math.sqrt(dx*dx + dy*dy) < 10) {
+                    const distSq = dx*dx + dy*dy;
+                    if (distSq < 100) { // 10の2乗である100と比較
                         this.onPlayerMiss();
                         return;
                     }
@@ -357,17 +371,27 @@ class Game {
         }
 
         // 2. 敵の被弾
-        this.entities.filter(e => e instanceof Enemy).forEach(enemy => {
-            if (enemy.y < 20) return;
-            this.entities.filter(b => b instanceof Bullet).forEach(bullet => {
+        const currentEnemies = this.entities.filter(e => e instanceof Enemy && e.active);
+        const currentBullets = this.entities.filter(b => b instanceof Bullet && b.active);
+
+        currentEnemies.forEach(enemy => {
+            if (enemy.y < 20) return; // 出現直後は無敵
+
+            currentBullets.forEach(bullet => {
+                if (!bullet.active) return; // すでに他の敵に当たっていたらスキップ
+
                 if (this.isHit(bullet, enemy)) {
-                    bullet.active = false;
+                    bullet.active = false; // 弾を消す
+                    this.stats.shotsHit++;
+
                     if (enemy.takeDamage(1)) {
+                        // 撃破処理
                         const scoreGain = 50 * enemy.maxHp * (enemy.maxHp + 1);
                         this.score += scoreGain;
-                        console.log(`Score:+${scoreGain}`);
+                        this.stats.enemiesKilled++; // ★撃破カウント
                         this.createExplosion(enemy.x + 16, enemy.y + 16, enemy);
                     } else {
+                        // 被弾のみ（耐久力あり）
                         this.score += 10;
                         this.audio.playHitSound();
                         this.particles.push(new Particle(bullet.x, bullet.y));
@@ -484,10 +508,29 @@ class Game {
     }
 
     showStartScreen(msg, isNew) {
-        const hiMsg = isNew ? `<br><br><span class="new-record">★ NEW HI-SCORE !! ★</span>` : "";
+        const accuracy = this.stats.shotsFired > 0 
+            ? Math.floor((this.stats.shotsHit / this.stats.shotsFired) * 100) 
+            : 0;
+
+        const statsHtml = `
+            <div class="stats-container">
+                <div class="stats-row"><span class="stats-label">KILLS:</span><span class="stats-value">${this.stats.enemiesKilled} / ${this.stats.enemiesSpawned}</span></div>
+                <div class="stats-row"><span class="stats-label">ACCURACY:</span><span class="stats-value">${accuracy}%</span></div>
+                <div class="stats-row"><span class="stats-label">TOTAL SCORE:</span><span class="stats-value">${this.score.toLocaleString()}</span></div>
+            </div>
+        `;
+
+        const hiMsg = isNew ? `<br><span class="new-record">★ NEW HI-SCORE !! ★</span>` : "";
         const screen = document.getElementById('start-screen');
         screen.style.display = 'flex';
-        screen.querySelector('p').innerHTML = `${msg}${hiMsg}<br><br>RETRY OPERATION?`;
+        
+        // メッセージとスタッツ、リトライ案内を合体
+        screen.querySelector('p').innerHTML = `
+            <span style="color:var(--color-cyan); font-size:16px;">${msg}</span>
+            ${statsHtml}
+            ${hiMsg}
+            <br>RETRY OPERATION?
+        `;
     }
 
     setupShareButton() {
