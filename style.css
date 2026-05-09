@@ -99,6 +99,54 @@ canvas {
     50% { opacity: 0; }
 }
 
+/* 武器情報全体のコンテナ */
+#weapon-container {
+    display: none; /* 初期状態は隠す */
+    position: absolute;
+    bottom: 15px; /* 画面下からの距離 */
+    right: 15px;  /* 画面右からの距離 */
+    text-align: right;
+    font-family: 'Press Start 2P', cursive;
+    pointer-events: none; /* マウスクリックを透過させてゲーム操作を邪魔しない */
+    z-index: 10; /* 他のUIより手前に */
+}
+
+/* ラベル：SYSTEM-LOAD */
+#weapon-label {
+    font-size: 7px;
+    color: #444; /* 目立ちすぎないグレー */
+    margin-bottom: 2px;
+    letter-spacing: 1px;
+}
+
+/* メイン表示：WEAPON: STRAIGHT */
+#weapon-display {
+    font-size: 11px;
+    color: #0ff; /* シアン（STRAIGHT時の基本色） */
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.7);
+    margin-bottom: 4px;
+    transition: color 0.2s, text-shadow 0.2s; /* 切り替え時の色変化を滑らかに */
+}
+
+/* 操作ヒント：[X] OR CLICK TO CHANGE */
+#weapon-hint {
+    font-size: 7px;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: -0.5px;
+    animation: weapon-blink 2s infinite; /* ゆっくり点滅 */
+}
+
+/* WIDEモード時の強調色（JSでクラスを付け替える用） */
+#weapon-display.mode-wide {
+    color: #f0f; /* マゼンタ */
+    text-shadow: 0 0 5px rgba(255, 0, 255, 0.7);
+}
+
+/* ヒントの点滅アニメーション */
+@keyframes weapon-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+}
 
 /* 画面共通レイアウト（スタート、クレジット等） */
 .screen {

@@ -30,17 +30,28 @@ class Entity {
 /**
  * 弾クラス（自機用）
  */
-class Bullet extends Entity {
-    constructor(x, y) {
-        super(x, y, 4, 12);
-        this.speed = 8;
+class Bullet {
+    // 第3引数に vx を追加（デフォルトは0）
+    constructor(x, y, vx = 0) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx; // 横方向の速度
+        this.vy = -7; // 縦方向の速度（上へ）
+        this.width = 4;
+        this.height = 10;
+        this.active = true;
     }
-    /** 自機弾の移動更新と画面外判定 */
-    update() {
-        this.y -= this.speed;
-        if (this.y < -20) this.active = false;
+
+    update(game) {
+        this.x += this.vx; // 横に動かす
+        this.y += this.vy; // 縦に動かす
+
+        // 画面外に出たら消す
+        if (this.y < -20 || this.x < -20 || this.x > game.width + 20) {
+            this.active = false;
+        }
     }
-    /** 弾を描画する */
+
     draw(ctx) {
         ctx.fillStyle = '#FF0';
         ctx.fillRect(this.x, this.y, this.width, this.height);
@@ -95,14 +106,19 @@ class Enemy extends Entity {
     /** 敵の移動と攻撃を管理する */
     update(game) {
         this.y += this.speed;
-        if (this.y > 480) this.active = false;
-
+        if (this.y > 480) {
+            this.active = false;
+            return;
+        }
         if (this.active) {
-            this.shootTimer++;
-            const currentInterval = this.baseShootInterval / this.fireRateMultiplier;
-            if (this.shootTimer >= currentInterval) {
-                this.shoot(game);
-                this.shootTimer = 0;
+            const isInFiringRange = this.y > 20 && this.y < 475;
+            if (isInFiringRange) {
+                this.shootTimer++;
+                const currentInterval = this.baseShootInterval / this.fireRateMultiplier;
+                if (this.shootTimer >= currentInterval) {
+                    this.shoot(game);
+                    this.shootTimer = 0;
+                }
             }
         }
     }
@@ -270,8 +286,8 @@ class Player extends Entity {
 
     /** プレイヤーを描画する（無敵状態では点滅する） */
     draw(ctx) {
-        // 点滅
-        if (this.invincibleTimer > 0 && Math.floor(this.invincibleTimer / 5) % 2 === 0) return;
+        if (!this.alive) return;    // 死んでたら非表示
+        if (this.invincibleTimer > 0 && Math.floor(this.invincibleTimer / 5) % 2 === 0) return;        // 点滅
 
         if (this.isLoaded) {
             ctx.drawImage(this.image, this.x, this.y, this.width, this.height);

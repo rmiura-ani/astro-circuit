@@ -18,6 +18,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
 </head>
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-KJJQ5E61FL"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+
+gtag('config', 'G-KJJQ5E61FL');
+</script>
+
 <body>
 
 <div id="game-container">
@@ -30,6 +41,11 @@
             HI-SCORE: 00000000
         </div>
         <div id="lives-display"></div>
+        <div id="weapon-container">
+            <div id="weapon-label">SYSTEM-LOAD</div>
+            <div id="weapon-display"></div>
+            <div id="weapon-hint"></div>
+        </div>
     </div>
 
     <div id="config-screen" class="screen" style="display: none;">

@@ -19,7 +19,7 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
-        this.version = "0.25";
+        this.version = "0.26";
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
 
         // --- サブシステム ---
@@ -41,6 +41,7 @@ class Game {
         this.isInvincibleCheat = false;
         this.isBgmFading = false;
         this.cheatUsedInSession = false;
+        this.weaponMode = 'STRAIGHT'; // 初期状態
 
         this.frame = 0;
         this.gameOverTimer = 0;
@@ -110,19 +111,45 @@ class Game {
     }
 
     async preloadAssets() {
+        // --- オーディオ用プロミス生成器 ---
         const loadAud = (a) => new Promise(r => {
             if (!a || !a.src) return r();
-            a.oncanplaythrough = () => r();
-            a.onerror = () => r();
+            // すでに読み込み済みなら即終了
+            if (a.readyState >= 3) return r(); 
+            
+            a.addEventListener('canplaythrough', r, { once: true });
+            a.addEventListener('error', r, { once: true }); // エラーでも進める（止まらないように）
             a.load();
+            
+            // タイムアウト設定（5秒待ってもダメなら次へ）
             setTimeout(r, 5000);
         });
 
+        // --- 画像用プロミス生成器 ---
+        const loadImg = (url) => new Promise(r => {
+            const img = new Image();
+            img.onload = () => r(img);
+            img.onerror = () => r(null); // エラーでも進める
+            img.src = url;
+        });
+
+        // 1. 全てのオーディオをリスト化
         const bgmPromises = Object.values(this.audio.bgms).map(loadAud);
         const sePromises = Object.values(this.audio.sounds).map(loadAud);
-        
-        // 画像は簡易的にロード（Enemyクラス等で個別にloadイベントがあるため最低限）
-        await Promise.all([...bgmPromises, ...sePromises]);
+
+        // 2. 必要な画像をリスト化 (パスは環境に合わせて調整してください)
+        const imagesToLoad = [
+            this.assetBase + 'player.png',
+            this.assetBase + 'enemy_straight.png',
+            this.assetBase + 'enemy_sine.png',
+            this.assetBase + 'enemy_station.png'
+        ];
+        const imgPromises = imagesToLoad.map(url => loadImg(url));
+
+        // 3. 全てが完了するまで待機
+        console.log("Loading assets...");
+        await Promise.all([...bgmPromises, ...sePromises, ...imgPromises]);
+        console.log("All assets loaded.");
     }
 
     setStartMessage(text, color) {
@@ -142,6 +169,18 @@ class Game {
             e.stopPropagation();
             this.stopIdleTimer();
             this.config.open();
+        });
+
+        // マウス/タッチでの武器切り替え（ゲーム中、自機以外を触った時）
+        window.addEventListener('mousedown', (e) => {
+            // ゲームが実行中で、プレイヤーが生きている時のみ判定
+            if (this.isRunning && this.player && this.player.alive) {
+                
+                // ★ 判定ロジック：クリックされたターゲットが canvas ではない場合
+                if (e.target !== this.canvas) {
+                    this.toggleWeapon();
+                }
+            }
         });
 
         // キーボード
@@ -164,6 +203,10 @@ class Game {
         if (e.code === 'KeyC' && !this.isRunning && !this.isShowingCredits) {
             this.stopIdleTimer();
             this.config.open();
+        }
+
+        if (e.code === 'KeyX' && this.isRunning) {
+            this.toggleWeapon();
         }
 
         if (['Space', 'KeyZ'].includes(e.code)) this.handleProceed();
@@ -195,7 +238,8 @@ class Game {
     start() {
         document.getElementById('start-screen').style.display = 'none';
         document.getElementById('hi-score-display').classList.remove('counter-stop');
-        
+        document.getElementById('weapon-container').style.display = 'block';
+
         this.enemyManager?.setDifficulty(this.difficultyParams[this.config.difficulty]);
         this.reset();
         this.isRunning = true;
@@ -218,6 +262,8 @@ class Game {
         this.isBgmFading = false;
         this.enemyManager.reset();
         this.audio.resetBGM();
+        this.weaponMode = 'STRAIGHT';
+        this.updateWeaponUI(); // 開始時に表示されるようになる！
     }
 
     /** メインループ */
@@ -238,14 +284,54 @@ class Game {
         this.updateEntities();
     }
 
+    // 新しく追加：UI表示を最新の状態に更新する
+    updateWeaponUI() {
+        const displayEl = document.getElementById('weapon-display');
+        const hintEl = document.getElementById('weapon-hint');
+
+        if (displayEl) {
+            displayEl.innerText = `WEAPON: ${this.weaponMode}`;
+            displayEl.className = (this.weaponMode === 'WIDE') ? 'mode-wide' : '';
+        }
+        if (hintEl) {
+            hintEl.innerText = '[X]Key OR TAP SIDE-UI TO CHANGE';
+        }
+    }
+
+    // toggleWeapon ではこのメソッドを呼ぶだけにする
+    toggleWeapon() {
+        this.weaponMode = (this.weaponMode === 'STRAIGHT') ? 'WIDE' : 'STRAIGHT';
+        this.audio.playPowerUp();
+        this.updateWeaponUI(); // 更新
+    }
+
     handlePlayerShooting() {
         const isFiring = this.input.isPressed('KeyZ') || this.input.isPressed('Space') || this.input.isTouching;
-        if (isFiring && this.frame % 10 === 0) {
-            this.entities.push(new Bullet(this.player.x + 14, this.player.y));
-            this.audio.playShot();
-            this.score += 20;
-        } else if (this.frame % 5 === 0) {
-            this.score += 30; // 生存ボーナス
+        
+        if (isFiring) {
+            if (this.weaponMode === 'STRAIGHT') {
+                if (this.frame % 8 === 0) {
+                    // STRAIGHT: 正面に2連装（威力2倍のイメージ）
+                    this.entities.push(new Bullet(this.player.x + 8, this.player.y, 0));
+                    this.entities.push(new Bullet(this.player.x + 20, this.player.y, 0));
+                    this.audio.playShot();
+                }
+            } else {
+                if (this.frame % 12 === 0) {
+                    // WIDE: 3方向に拡散（広範囲カバー）
+                    this.entities.push(new Bullet(this.player.x + 14, this.player.y, 0));    // 中央
+                    this.entities.push(new Bullet(this.player.x + 14, this.player.y, -3.5)); // 左斜め
+                    this.entities.push(new Bullet(this.player.x + 14, this.player.y, 3.5));  // 右斜め
+                    this.audio.playShot();
+                }
+            }
+        }
+        if (this.frame % 5 === 0) {
+            if (isFiring) {
+                this.score += 20;
+            } else {
+                this.score += 30; // 生存ボーナス
+            }
         }
     }
 
@@ -282,6 +368,7 @@ class Game {
                         console.log(`Score:+${scoreGain}`);
                         this.createExplosion(enemy.x + 16, enemy.y + 16, enemy);
                     } else {
+                        this.score += 10;
                         this.audio.playHitSound();
                         this.particles.push(new Particle(bullet.x, bullet.y));
                     }
@@ -390,6 +477,7 @@ class Game {
             this.updateScoreUI();
         }
 
+        document.getElementById('weapon-container').style.display = 'none';
         this.showStartScreen(msg, isNewRecord);
         this.setupShareButton();
         this.startIdleTimer();
