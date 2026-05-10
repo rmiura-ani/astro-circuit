@@ -8,18 +8,17 @@
  * Note: Included assets are the property of their respective owners.
  */
 
-
 /**
- * ゲーム全体を統括するメインクラス (v0.25 Refactored)
+ * ゲーム全体を統括するメインクラス
  */
 class Game {
     constructor() {
-        // --- 設定・定数 ---
+        // --- 基本設定 ---
         this.canvas = document.getElementById('game-canvas');
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
-        this.version = "0.30";
+        this.version = "0.32";
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
 
         // --- サブシステム ---
@@ -29,24 +28,30 @@ class Game {
         this.config = new ConfigManager(this);
         this.config.loadConfig();
 
-        // --- ゲーム内部状態（プライベート変数風） ---
+        // --- ゲーム内部状態 ---
         this._score = 0;
         this._lives = this.config.lives;
         this.highScore = parseInt(localStorage.getItem('void_circuit_highscore')) || 0;
+        
+        // 統計データ
         this.stats = {
             enemiesSpawned: 0,
             enemiesKilled: 0,
             shotsFired: 0,
             shotsHit: 0
         };
+
+        // セッション記録（リザルト/シェア用）
+        this.sessionRecord = null;
+
+        this.inputMode = 'NONE'; // NONE, KEYBOARD, MOUSE, BOTH
         this.isRunning = false;
         this.isLoaded = false;
         this.isShowingCredits = false;
         this.isCleared = false;
         this.isInvincibleCheat = false;
         this.isBgmFading = false;
-        this.cheatUsedInSession = false;
-        this.weaponMode = 'STRAIGHT'; // 初期状態
+        this.weaponMode = 'STRAIGHT';
 
         this.frame = 0;
         this.gameOverTimer = 0;
@@ -59,7 +64,6 @@ class Game {
         this.enemyManager = null;
         this.idleTimeout = null;
 
-        // 難易度テーブル
         this.difficultyParams = {
             'EASY':      { enemySpeed: 0.8, fireRate: 0.7 },
             'NORMAL':    { enemySpeed: 1.0, fireRate: 1.0 },
@@ -68,7 +72,7 @@ class Game {
         };
     }
 
-    // --- プロパティ Setter (値をいじるとUIが勝手に変わる) ---
+    // --- Getter/Setter ---
     set score(val) {
         const MAX_SCORE = 99999990;
         this._score = Math.min(val, MAX_SCORE);
@@ -82,9 +86,32 @@ class Game {
     }
     get currentLives() { return this._lives; }
 
+    // --- ミッション文字列生成 (集約ロジック) ---
+    getMissionCode(isShare = false) {
+        const r = this.sessionRecord || {
+            missionName: "UNKNOWN",
+            difficulty: this.config.difficulty,
+            extend: this.config.extend,
+            inputMode: this.inputMode,
+            cheatUsed: this.isInvincibleCheat
+        };
+
+        const diffMap = { 'EASY':'E', 'NORMAL':'N', 'HARD':'H', 'VERY HARD':'VH' };
+        const diffStr = diffMap[r.difficulty] || 'U';
+        const cheatStr = r.cheatUsed ? (isShare ? '(CHEAT)' : '(CHT)') : '';
+        const extendStr = r.extend === 'NONE' ? 'OFF' : `${(r.extend/1000)}k`;
+        const livesStr = `L${r.lives}`; // ★ -L3 などの表記を作成
+
+        // 操作モード判定
+        let controlSuffix = '-MK';
+        if (r.inputMode === 'MOUSE') controlSuffix = '-M';
+        if (r.inputMode === 'KEYBOARD') controlSuffix = '-K';
+
+        return `${r.missionName}-${diffStr}${cheatStr}-${livesStr}-${extendStr}${controlSuffix}`;
+    }
+
     /** 初期化 */
     async init() {
-        const messageEl = document.querySelector('#start-screen p');
         document.getElementById('version-display').innerText = this.version;
         document.getElementById('config-open-btn').style.display = 'none';
 
@@ -116,33 +143,23 @@ class Game {
     }
 
     async preloadAssets() {
-        // --- オーディオ用プロミス生成器 ---
         const loadAud = (a) => new Promise(r => {
-            if (!a || !a.src) return r();
-            // すでに読み込み済みなら即終了
-            if (a.readyState >= 3) return r(); 
-            
+            if (!a || !a.src || a.readyState >= 3) return r();
             a.addEventListener('canplaythrough', r, { once: true });
-            a.addEventListener('error', r, { once: true }); // エラーでも進める（止まらないように）
+            a.addEventListener('error', r, { once: true });
             a.load();
-            
-            // タイムアウト設定（5秒待ってもダメなら次へ）
             setTimeout(r, 5000);
         });
 
-        // --- 画像用プロミス生成器 ---
         const loadImg = (url) => new Promise(r => {
             const img = new Image();
             img.onload = () => r(img);
-            img.onerror = () => r(null); // エラーでも進める
+            img.onerror = () => r(null);
             img.src = url;
         });
 
-        // 1. 全てのオーディオをリスト化
         const bgmPromises = Object.values(this.audio.bgms).map(loadAud);
         const sePromises = Object.values(this.audio.sounds).map(loadAud);
-
-        // 2. 必要な画像をリスト化 (パスは環境に合わせて調整してください)
         const imagesToLoad = [
             this.assetBase + 'player.png',
             this.assetBase + 'enemy_straight.png',
@@ -151,47 +168,35 @@ class Game {
         ];
         const imgPromises = imagesToLoad.map(url => loadImg(url));
 
-        // 3. 全てが完了するまで待機
-        console.log("Loading assets...");
         await Promise.all([...bgmPromises, ...sePromises, ...imgPromises]);
-        console.log("All assets loaded.");
     }
 
     setStartMessage(text, color) {
         const el = document.querySelector('#start-screen p');
-        el.innerText = text;
+        el.innerHTML = text;
         el.style.color = color;
         el.style.animation = "none";
     }
 
     /** イベント登録 */
     setupEvents() {
-        // 開始/クリック系
-        document.getElementById('start-screen').addEventListener('click', () => this.handleProceed());
-        
-        // 設定ボタン
+        document.getElementById('start-screen').addEventListener('click', () => this.handleProceed('MOUSE'));
         document.getElementById('config-open-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.stopIdleTimer();
             this.config.open();
         });
 
-        // マウス/タッチでの武器切り替え（ゲーム中、自機以外を触った時）
         window.addEventListener('mousedown', (e) => {
-            // ゲームが実行中で、プレイヤーが生きている時のみ判定
-            if (this.isRunning && this.player && this.player.alive) {
-                
-                // ★ 判定ロジック：クリックされたターゲットが canvas ではない場合
+            if (this.isRunning && this.player && this.player.alive && e.target !== this.canvas) {
                 if (e.target !== this.canvas) {
                     this.toggleWeapon();
                 }
             }
         });
 
-        // キーボード
         window.addEventListener('keydown', (e) => this.handleKeyDown(e));
 
-        // クレジット終了検知
         const credits = document.getElementById('credit-screen');
         credits.onanimationend = () => {
             setTimeout(() => { if (this.isShowingCredits) this.backToTitle(); }, 5000);
@@ -201,21 +206,14 @@ class Game {
     handleKeyDown(e) {
         if (this.config.isMode) {
             this.config.handleInput(e);
-            if (!this.config.isMode) this.startIdleTimer();
             return;
         }
-
         if (e.code === 'KeyC' && !this.isRunning && !this.isShowingCredits) {
             this.stopIdleTimer();
             this.config.open();
         }
-
-        if (e.code === 'KeyX' && this.isRunning) {
-            this.toggleWeapon();
-        }
-
-        if (['Space', 'KeyZ'].includes(e.code)) this.handleProceed();
-
+        if (e.code === 'KeyX' && this.isRunning) this.toggleWeapon();
+        if (['Space', 'KeyZ'].includes(e.code)) this.handleProceed('KEYBOARD');
         if (e.key === 'Escape' && this.isRunning) this.handleEmergencyEscape();
     }
 
@@ -258,12 +256,25 @@ class Game {
         this.frame = 0;
         this.score = 0;
         this.currentLives = this.config.lives;
+
+        // 手順 A: 開始時セッションレコードの保存
+        const rawPath = this.enemyManager.scenarioPath || 'UNKNOWN';
+        this.sessionRecord = {
+            missionName: rawPath.split('/').pop().replace('.json', '').toUpperCase(),
+            difficulty: this.config.difficulty,
+            extend: this.config.extend,
+            lives: this.config.lives,
+            inputMode: this.inputMode, // その時点のモードを記録
+            cheatUsed: this.isInvincibleCheat
+        };
+
         this.stats = {
-                enemiesSpawned: 0,
-                enemiesKilled: 0,
-                shotsFired: 0,
-                shotsHit: 0
-            };
+            enemiesSpawned: 0,
+            enemiesKilled: 0,
+            shotsFired: 0,
+            shotsHit: 0
+        };
+
         this.hasExtended = false;
         this.hasCounterStopped = false;
         this.extendThreshold = this.config.extend;
@@ -274,10 +285,9 @@ class Game {
         this.enemyManager.reset();
         this.audio.resetBGM();
         this.weaponMode = 'STRAIGHT';
-        this.updateWeaponUI(); // 開始時に表示されるようになる！
+        this.updateWeaponUI();
     }
 
-    /** メインループ */
     update() {
         this.stars.update();
         if (!this.isRunning) return;
@@ -293,36 +303,46 @@ class Game {
         }
         this.updateDebugInfo();
         this.updateEntities();
+
+        if (this.inputMode !== 'BOTH') {
+            const isMouseActive = this.input.isTouching;
+            const isKeyActive = (this.input.isPressed('KeyZ') || this.input.isPressed('Space') || 
+                                this.input.isPressed('ArrowUp') || this.input.isPressed('KeyX')); // Xキー(武器換装)も判定に含める
+
+            if (this.inputMode === 'KEYBOARD' && isMouseActive) {
+                this.inputMode = 'BOTH';
+            } else if (this.inputMode === 'MOUSE' && isKeyActive) {
+                this.inputMode = 'BOTH';
+            }
+            
+            // セッション記録にもリアルタイム反映（リザルト用）
+            if (this.sessionRecord) {
+                this.sessionRecord.inputMode = this.inputMode;
+            }
+        }
     }
 
-    // 新しく追加：UI表示を最新の状態に更新する
     updateWeaponUI() {
         const displayEl = document.getElementById('weapon-display');
         const hintEl = document.getElementById('weapon-hint');
-
         if (displayEl) {
             displayEl.innerText = `WEAPON: ${this.weaponMode}`;
             displayEl.className = (this.weaponMode === 'WIDE') ? 'mode-wide' : '';
         }
-        if (hintEl) {
-            hintEl.innerText = '[X]Key OR TAP SIDE-UI TO CHANGE';
-        }
+        if (hintEl) hintEl.innerText = '[X]Key OR TAP SIDE-UI TO CHANGE';
     }
 
-    // toggleWeapon ではこのメソッドを呼ぶだけにする
     toggleWeapon() {
         this.weaponMode = (this.weaponMode === 'STRAIGHT') ? 'WIDE' : 'STRAIGHT';
         this.audio.playChangeWp();
-        this.updateWeaponUI(); // 更新
+        this.updateWeaponUI();
     }
 
     handlePlayerShooting() {
         const isFiring = this.input.isPressed('KeyZ') || this.input.isPressed('Space') || this.input.isTouching;
-        
         if (isFiring) {
             if (this.weaponMode === 'STRAIGHT') {
                 if (this.frame % 8 === 0) {
-                    // STRAIGHT: 正面に2連装（威力2倍のイメージ）
                     this.entities.push(new Bullet(this.player.x + 8, this.player.y, 0));
                     this.entities.push(new Bullet(this.player.x + 20, this.player.y, 0));
                     this.stats.shotsFired++;
@@ -330,22 +350,15 @@ class Game {
                 }
             } else {
                 if (this.frame % 12 === 0) {
-                    // WIDE: 3方向に拡散（広範囲カバー）
-                    this.entities.push(new Bullet(this.player.x + 14, this.player.y, 0));    // 中央
-                    this.entities.push(new Bullet(this.player.x + 14, this.player.y, -3.5)); // 左斜め
-                    this.entities.push(new Bullet(this.player.x + 14, this.player.y, 3.5));  // 右斜め
+                    this.entities.push(new Bullet(this.player.x + 14, this.player.y, 0));
+                    this.entities.push(new Bullet(this.player.x + 14, this.player.y, -3.5));
+                    this.entities.push(new Bullet(this.player.x + 14, this.player.y, 3.5));
                     this.stats.shotsFired++;
                     this.audio.playShot();
                 }
             }
         }
-        if (this.frame % 5 === 0) {
-            if (isFiring) {
-                this.score += 20;
-            } else {
-                this.score += 30; // 生存ボーナス
-            }
-        }
+        if (this.frame % 5 === 0) this.score += isFiring ? 20 : 30;
     }
 
     updateEntities() {
@@ -355,14 +368,12 @@ class Game {
     }
 
     checkCollisions() {
-        // 1. プレイヤーの被弾
         if (this.player.alive && !this.player.isInvincible && !this.isInvincibleCheat) {
             const px = this.player.x + 16, py = this.player.y + 16;
             for (const e of this.entities) {
                 if (e instanceof Enemy || e instanceof EnemyBullet) {
                     const dx = px - (e.x + e.width/2), dy = py - (e.y + e.height/2);
-                    const distSq = dx*dx + dy*dy;
-                    if (distSq < 100) { // 10の2乗である100と比較
+                    if (dx*dx + dy*dy < 100) {
                         this.onPlayerMiss();
                         return;
                     }
@@ -370,29 +381,21 @@ class Game {
             }
         }
 
-        // 2. 敵の被弾
         const currentEnemies = this.entities.filter(e => e instanceof Enemy && e.active);
         const currentBullets = this.entities.filter(b => b instanceof Bullet && b.active);
 
         currentEnemies.forEach(enemy => {
-            if (enemy.y < 20) return; // 出現直後は無敵
-
+            if (enemy.y < 20) return;
             currentBullets.forEach(bullet => {
-                if (!bullet.active) return; // すでに他の敵に当たっていたらスキップ
-                if (!enemy.active) return;  // ★ 追加：このループ（他の弾の計算）ですでに敵が倒されていたらスキップ
-
+                if (!bullet.active || !enemy.active) return;
                 if (this.isHit(bullet, enemy)) {
-                    bullet.active = false; // 弾を消す
+                    bullet.active = false;
                     this.stats.shotsHit++;
-
                     if (enemy.takeDamage(1)) {
-                        // 撃破処理
-                        const scoreGain = 50 * enemy.maxHp * (enemy.maxHp + 1);
-                        this.score += scoreGain;
-                        this.stats.enemiesKilled++; // ★撃破カウント
+                        this.score += 50 * enemy.maxHp * (enemy.maxHp + 1);
+                        this.stats.enemiesKilled++;
                         this.createExplosion(enemy.x + 16, enemy.y + 16, enemy);
                     } else {
-                        // 被弾のみ（耐久力あり）
                         this.score += 10;
                         this.audio.playHitSound();
                         this.particles.push(new Particle(bullet.x, bullet.y));
@@ -402,22 +405,20 @@ class Game {
         });
     }
 
-    isHit(rect1, rect2) {
-        return rect1.x < rect2.x + rect2.width && rect1.x + rect1.width > rect2.x &&
-               rect1.y < rect2.y + rect2.height && rect1.y + rect1.height > rect2.y;
+    isHit(r1, r2) {
+        return r1.x < r2.x + r2.width && r1.x + r1.width > r2.x &&
+               r1.y < r2.y + r2.height && r1.y + r1.height > r2.y;
     }
 
     checkClearCondition() {
-        if (this.enemyManager.isFinished && 
-            this.entities.filter(e => e instanceof Enemy).length === 0) {
+        if (this.enemyManager.isFinished && this.entities.filter(e => e instanceof Enemy).length === 0) {
             if (!this.isCleared) {
                 this.isCleared = true;
-                this.audio.fadeOutBGM(3000); // 3秒かけてフェード
+                this.audio.fadeOutBGM(3000);
             }
         }
     }
 
-    /** 演出・エフェクト */
     createExplosion(x, y, enemy) {
         const hp = enemy.maxHp || 1;
         const count = 10 + (hp * 2);
@@ -437,13 +438,9 @@ class Game {
         this.player.alive = false;
         this.audio.playExplosion();
         for (let i = 0; i < 30; i++) this.particles.push(new Particle(this.player.x + 16, this.player.y + 16, 'player'));
-
         this.currentLives--;
-        if (this.currentLives > 0) {
-            setTimeout(() => this.respawnPlayer(), 1500);
-        } else {
-            this.audio.fadeOutBGM();
-        }
+        if (this.currentLives > 0) setTimeout(() => this.respawnPlayer(), 1500);
+        else this.audio.fadeOutBGM();
     }
 
     respawnPlayer() {
@@ -453,25 +450,20 @@ class Game {
         this.player.setInvincible(180);
     }
 
-    /** 描画系 */
     draw() {
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.width, this.height);
         this.stars.draw(this.ctx);
-
         if (!this.player) return;
-
         this.entities.forEach(e => e.draw(this.ctx));
         this.particles.forEach(p => p.draw(this.ctx));
         this.player.draw(this.ctx);
-
         this.drawOverlayMessages();
     }
 
     drawOverlayMessages() {
         this.ctx.font = '16px "Press Start 2P", cursive';
         this.ctx.textAlign = 'center';
-
         if (!this.player.alive && this.currentLives <= 0) {
             this.gameOverTimer++;
             this.ctx.fillStyle = 'rgba(255,0,0,0.5)';
@@ -480,7 +472,6 @@ class Game {
             this.ctx.fillText('GAME OVER', 160, 230);
             if (this.gameOverTimer === 180) this.endSession("GAME OVER");
         }
-
         if (this.isCleared) {
             this.clearTimer++;
             this.ctx.fillStyle = '#0FF';
@@ -489,64 +480,35 @@ class Game {
         }
     }
 
-    /** セッション終了・シェア */
     endSession(msg) {
         if (!this.isRunning && this.gameOverTimer > 182) return;
         this.isRunning = false;
-
-        const isNewRecord = this.score > this.highScore && this.score > 0;
-        if (isNewRecord) {
+        const isNew = this.score > this.highScore && this.score > 0;
+        if (isNew) {
             this.highScore = this.score;
             localStorage.setItem('void_circuit_highscore', this.highScore);
             document.getElementById('hi-score-display').classList.add('counter-stop');
             this.updateScoreUI();
         }
-
         document.getElementById('weapon-container').style.display = 'none';
-        this.showStartScreen(msg, isNewRecord);
+        this.showStartScreen(msg, isNew);
         this.setupShareButton();
         this.startIdleTimer();
     }
 
     showStartScreen(msg, isNew) {
-        // --- MISSION文字列の生成 (generateShareTextのロジックを流用) ---
-        const rawPath = this.enemyManager.scenarioPath || 'UNKNOWN';
-        const opName = rawPath.split('/').pop().replace('.json', '').toUpperCase();
-        const diff = { 'EASY':'E', 'NORMAL':'N', 'HARD':'H', 'VERY HARD':'VH' }[this.config.difficulty];
-        const cheat = this.cheatUsedInSession ? '(CHT)' : ''; // リザルト用は少し短く
-        const extend = this.config.extend === 'NONE' ? 'OFF' : `${(this.config.extend/1000)}k`;
-        
-        const missionCode = `${opName}-${diff}${cheat}-${extend}`;
-
-        // --- 統計データの計算 ---
-        const accuracy = this.stats.shotsFired > 0 
-            ? Math.floor((this.stats.shotsHit / this.stats.shotsFired) * 100) 
-            : 0;
-
-        // --- リザルト表示用HTML ---
+        const missionCode = this.getMissionCode(false);
+        const accuracy = this.stats.shotsFired > 0 ? Math.floor((this.stats.shotsHit / this.stats.shotsFired) * 100) : 0;
         const statsHtml = `
-            <div class="mission-header">
-                MISSION: ${missionCode}
-            </div>
+            <div class="mission-header">MISSION: ${missionCode}</div>
             <div class="stats-container">
                 <div class="stats-row"><span class="stats-label">KILLS:</span><span class="stats-value">${this.stats.enemiesKilled} / ${this.stats.enemiesSpawned}</span></div>
                 <div class="stats-row"><span class="stats-label">HIT RATE:</span><span class="stats-value">${accuracy}%</span></div>
             </div>
         `;
-
-        const hiMsg = isNew ? `<div class="new-record">★ NEW HI-SCORE !! ★</div>` : "";
-        const screen = document.getElementById('start-screen');
-        const pEl = screen.querySelector('p');
-
-        // スコア表示と合体
-        pEl.innerHTML = `
-            <div class="result-msg">${msg}</div>
-            ${statsHtml}
-            ${hiMsg}
-            <br>RETRY OPERATION?
-        `;
-        
-        screen.style.display = 'flex';
+        const pEl = document.querySelector('#start-screen p');
+        pEl.innerHTML = `<div class="result-msg">${msg}</div>${statsHtml}${isNew ? '<div class="new-record">★ NEW HI-SCORE !! ★</div>' : ''}<br>RETRY OPERATION?`;
+        document.getElementById('start-screen').style.display = 'flex';
     }
 
     setupShareButton() {
@@ -554,45 +516,33 @@ class Game {
         btn.style.display = 'block';
         btn.onclick = (e) => {
             e.stopPropagation();
-            const text = this.generateShareText();
-            window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+            window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(this.generateShareText())}`, '_blank');
         };
     }
 
     generateShareText() {
-        const rawPath = this.enemyManager.scenarioPath || 'UNKNOWN';
-        const opName = rawPath.split('/').pop().replace('.json', '').toUpperCase();
-        const difficulty = { 'EASY':'E', 'NORMAL':'N', 'HARD':'H', 'VERY HARD':'VH' }[this.config.difficulty];
-        const cheat = this.cheatUsedInSession ? '(CHEAT)' : '';
-        const extend = this.config.extend === 'NONE' ? 'OFF' : `${(this.config.extend/1000)}k`;
-
         return `PROJECT: VOID-CIRCUIT v${this.version}\n` +
                `----------------------------\n` +
                `■ SCORE  : ${this.score.toLocaleString()}\n` +
-               `■ MISSION: ${opName}-${difficulty}${cheat}-${extend}\n` +
+               `■ MISSION: ${this.getMissionCode(true)}\n` +
                `----------------------------\n` +
                `作戦完了。虚無の回路を突破せよ。\n\n` +
                `https://void-circuit.ani-net.com\n` +
                `#VoidCircuit #80年代STG #IndieGame`;
     }
 
-    /** UI更新 */
     updateScoreUI() {
         const scoreEl = document.getElementById('score-display');
         const hiScoreEl = document.getElementById('hi-score-display');
         if (scoreEl) {
             scoreEl.innerText = `SCORE: ${this.score.toString().padStart(8, '0')}`;
-            if (this.score >= 99999990) {
+            if (this.score >= 99999990 && !this.hasCounterStopped) {
                 scoreEl.classList.add('counter-stop');
-                if (!this.hasCounterStopped) {
-                    this.audio.playPowerUp();
-                    this.hasCounterStopped = true;
-                }
+                this.audio.playPowerUp();
+                this.hasCounterStopped = true;
             }
         }
         if (hiScoreEl) hiScoreEl.innerText = `HI-SCORE: ${this.highScore.toString().padStart(8, '0')}`;
-
-        // エクステンド判定
         if (!this.hasExtended && this.extendThreshold !== 'NONE' && this.score >= this.extendThreshold) {
             this.currentLives++;
             this.audio.playPowerUp();
@@ -604,14 +554,17 @@ class Game {
     updateDebugInfo() {
         const debugEl = document.getElementById('debug-info');
         if (this.isInvincibleCheat) {
+            if (this.sessionRecord) this.sessionRecord.cheatUsed = true;
             debugEl.style.display = 'block';
             document.getElementById('debug-frame').innerText = this.frame;
-            document.getElementById('debug-index').innerText = 
-                `${this.enemyManager.currentIndex} / ${this.enemyManager.scenario.length}`;
+            document.getElementById('debug-index').innerText = `${this.enemyManager.currentIndex} / ${this.enemyManager.scenario.length}`;
+            const loadEl = document.getElementById('debug-load');
+            if (loadEl) loadEl.innerText = this.entities.length + this.particles.length;
         } else {
             debugEl.style.display = 'none';
         }
     }
+
     updateLivesUI() {
         const el = document.getElementById('lives-display');
         if (!el) return;
@@ -626,13 +579,12 @@ class Game {
         setTimeout(() => el?.classList.remove('extend-blink'), 2000);
     }
 
-    /** その他管理 */
-    handleProceed() {
+    handleProceed(type) {
         if (this.config.isMode || this.isRunning) return;
         if (this.isShowingCredits) return this.backToTitle();
         if (this.player && !this.player.alive && this.gameOverTimer < 30) return;
-        
         if (this.isLoaded) {
+            this.inputMode = (type === 'MOUSE') ? 'MOUSE' : 'KEYBOARD';
             this.stopIdleTimer();
             this.start();
         }
@@ -642,9 +594,7 @@ class Game {
         this.stopIdleTimer();
         this.idleTimeout = setTimeout(() => this.showCredits(), 10000);
     }
-
     stopIdleTimer() { if (this.idleTimeout) clearTimeout(this.idleTimeout); }
-
     showCredits() {
         this.isShowingCredits = true;
         document.getElementById('title-content').style.display = 'none';
@@ -653,17 +603,14 @@ class Game {
         screen.style.display = 'block';
         screen.classList.add('scrolling');
     }
-
     backToTitle() {
         this.isShowingCredits = false;
-        const screen = document.getElementById('credit-screen');
-        screen.style.display = 'none';
-        screen.classList.remove('scrolling');
+        document.getElementById('credit-screen').style.display = 'none';
+        document.getElementById('credit-screen').classList.remove('scrolling');
         document.getElementById('title-content').style.display = 'block';
         document.getElementById('config-open-btn').style.display = 'block';
         this.startIdleTimer();
     }
-
     loop() {
         this.update();
         this.draw();
@@ -671,6 +618,5 @@ class Game {
     }
 }
 
-// 起動
 const game = new Game();
 game.init().then(() => game.loop());
