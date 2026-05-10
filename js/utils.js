@@ -17,7 +17,6 @@ class EnemyManager {
         this.enemySpeedMultiplier = 1.0;
         this.fireRateMultiplier = 1.0;
         this.currentIndex = 0; 
-        this.scenarioPath = '';
         this.isFinished = false; 
     }
     

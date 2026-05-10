@@ -13,17 +13,20 @@
  */
 class Game {
     constructor() {
+        this.VERSION = "0.34";
+        this.REQUIRED_SCENARIO_VER = "0.1";
+
         // --- 基本設定 ---
         this.canvas = document.getElementById('game-canvas');
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
-        this.version = "0.33";
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
+        this.scenarioDisplayName = 'NONE'
 
         // --- サブシステム ---
         this.input = new InputManager(this.canvas);
-        this.audio = new AudioManager(this.assetBase);
+        this.audio = new AudioManager();
         this.stars = new Starfield(this.width, this.height);
         this.config = new ConfigManager(this);
         this.config.loadConfig();
@@ -113,21 +116,36 @@ class Game {
 
     /** 初期化 */
     async init() {
-        document.getElementById('version-display').innerText = this.version;
+        document.getElementById('version-display').innerText = this.VERSION;
         document.getElementById('config-open-btn').style.display = 'none';
 
-        try {
-            const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
-            const path = isLocal ? './scenario.json' : this.assetBase + 'scenario.json';
+        const urlParams = new URLSearchParams(window.location.search);
+        let branch = urlParams.get('branch') || 'main'; // 指定がなければ main
+        this.assetBase = `https://raw.githubusercontent.com/rmiura-ani/void-circuit-assets/refs/heads/${branch}/`;
 
-            const res = await fetch(path);
+        try {
+            const scenarioPath = this.assetBase + 'scenario.json';
+            const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
+            if (isLocal) {
+                const scenarioPath = './scenario.json'; // ローカル時はカレントディレクトリ
+                branch = 'local';
+            }
+
+            const res = await fetch(scenarioPath);
             if (!res.ok) throw new Error("Fetch failed");
             const scenarioData = await res.json();
 
-            this.enemyManager = new EnemyManager(scenarioData);
-            this.enemyManager.scenarioPath = path;
+            // ★ バージョンチェック
+            const scenarioVer = parseFloat(scenarioData.version || "0.1");
+            if (scenarioVer < this.REQUIRED_SCENARIO_VER) {
+                throw new Error(`Scenario Version Error: v${scenarioVer} is too old. Required: v${this.REQUIRED_SCENARIO_VER}`);
+            }
 
-            this.audio.initAudio();
+            this.enemyManager = new EnemyManager(scenarioData);
+            
+            this.scenarioDisplayName = branch.toUpperCase();
+
+            this.audio.initAudio(this.assetBase); // AudioManager側にもベースURLを伝える
             await this.preloadAssets();
 
             this.isLoaded = true;
@@ -233,6 +251,7 @@ class Game {
             
             // 確実にリザルトへ送る
             this.currentLives = 0;
+            this.gameOverTimer = 180;
             this.onPlayerMiss(); // 爆発演出
             this.endSession("EMERGENCY EXIT");
         } else {
@@ -244,6 +263,7 @@ class Game {
             }, 1000);
         }
     }
+
     visualEffectWarning() {
         const container = document.getElementById('game-container');
         if (!container) return;
@@ -273,9 +293,8 @@ class Game {
         this.currentLives = this.config.lives;
 
         // 手順 A: 開始時セッションレコードの保存
-        const rawPath = this.enemyManager.scenarioPath || 'UNKNOWN';
         this.sessionRecord = {
-            missionName: rawPath.split('/').pop().replace('.json', '').toUpperCase(),
+            missionName: this.scenarioDisplayName,
             difficulty: this.config.difficulty,
             extend: this.config.extend,
             lives: this.config.lives,
@@ -536,7 +555,7 @@ class Game {
     }
 
     generateShareText() {
-        return `PROJECT: VOID-CIRCUIT v${this.version}\n` +
+        return `PROJECT: VOID-CIRCUIT v${this.VERSION}\n` +
                `----------------------------\n` +
                `■ SCORE  : ${this.score.toLocaleString()}\n` +
                `■ MISSION: ${this.getMissionCode(true)}\n` +

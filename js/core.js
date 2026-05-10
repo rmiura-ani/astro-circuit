@@ -71,8 +71,7 @@ class InputManager {
  * オーディオ管理：BGMとSEのライフサイクルを制御
  */
 class AudioManager {
-    constructor(assetBase) {
-        this.assetBase = assetBase;
+    constructor() {
         this.currentBgm = null;
         this.fadeInterval = null; // ★ ここに追加：タイマーを保持する場所
         this.sounds = {};
@@ -95,10 +94,10 @@ class AudioManager {
     }
 
     /** BGM と SE をロードして再生準備を行う */
-    initAudio() {
+    initAudio(basePath) {
         // BGMロード
         this.bgmKeys.forEach(key => {
-            const audio = new Audio(this.assetBase + this.CONFIG.BGM[key]);
+            const audio = new Audio(basePath + this.CONFIG.BGM[key]);
             audio.crossOrigin = "anonymous";
             audio.loop = true;
             audio.volume = 0.7;
@@ -108,7 +107,7 @@ class AudioManager {
         // SEロード
         this.seKeys.forEach(key => {
             const conf = this.CONFIG.SE[key];
-            const audio = new Audio(this.assetBase + conf.file);
+            const audio = new Audio(basePath + conf.file);
             audio.crossOrigin = "anonymous";
             audio.volume = conf.vol;
             this.sounds[key] = audio;
