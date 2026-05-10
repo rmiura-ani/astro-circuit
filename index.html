@@ -33,57 +33,6 @@ gtag('config', 'G-KJJQ5E61FL');
 
 <div id="game-container">
     <canvas id="game-canvas" width="320" height="480"></canvas>
-    <div id="ui-layer" style="position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; padding: 10px; box-sizing: border-box; display: flex; justify-content: space-between; z-index: 100;">
-        <div id="score-display">
-            SCORE: 00000000
-        </div>
-        <div id="hi-score-display">
-            HI-SCORE: 00000000
-        </div>
-        <div id="lives-display"></div>
-        <div id="weapon-container">
-            <div id="weapon-label">SYSTEM-LOAD</div>
-            <div id="weapon-display"></div>
-            <div id="weapon-hint"></div>
-        </div>
-    </div>
-
-    <div id="config-screen" class="screen" style="display: none;">
-        <h2 style="color: #FF0; text-shadow: none;">SYSTEM CONFIGURATION</h2>
-        
-        <div id="config-menu">
-            <div class="config-item active" data-setting="difficulty">
-                <span>DIFFICULTY</span>
-                <span class="value">NORMAL</span>
-            </div>
-            <div class="config-item" data-setting="lives">
-                <span>PLAYER LIVES</span>
-                <span class="value">3</span>
-            </div>
-            <div class="config-item" data-setting="extend">
-                <span>EXTEND SCORE</span>
-                <span class="value">500000</span>
-            </div>
-            <BR>
-            <div class="config-item" data-setting="sound">
-                <span>SOUND TEST</span>
-                <span class="value">< SHOP ></span>
-            </div>
-            <div class="config-item" data-setting="bgm">
-                <span>BGM TEST</span>
-                <span class="value">< STAGE1 ></span>
-            </div>
-            <BR>
-            <div class="config-item" data-setting="exit">
-                <span style="color: #0FF;">> SAVE AND EXIT</span>
-            </div>
-        </div>
-
-        <p style="font-size: 10px; margin-top: 30px; color: #888;">
-            USE UP/DOWN TO SELECT<br>
-            USE LEFT/RIGHT TO CHANGE
-        </p>
-    </div>
 
     <div id="start-screen" class="screen">
         <div id="title-content">
@@ -144,6 +93,63 @@ gtag('config', 'G-KJJQ5E61FL');
 
         <button id="share-btn">Share on X</button>
         <div id="version-display"></div>
+    </div>
+
+    <div id="ui-layer" style="position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; padding: 10px; box-sizing: border-box; display: flex; justify-content: space-between; z-index: 100;">
+        <div id="score-display">
+            SCORE: 00000000
+        </div>
+        <div id="hi-score-display">
+            HI-SCORE: 00000000
+        </div>
+        <div id="lives-display"></div>
+        <div id="weapon-container">
+            <div id="weapon-label">SYSTEM-LOAD</div>
+            <div id="weapon-display"></div>
+            <div id="weapon-hint"></div>
+        </div>
+    </div>
+
+    <div id="config-screen" class="screen" style="display: none;">
+        <h2 style="color: #FF0; text-shadow: none;">SYSTEM CONFIGURATION</h2>
+        
+        <div id="config-menu">
+            <div class="config-item active" data-setting="difficulty">
+                <span>DIFFICULTY</span>
+                <span class="value">NORMAL</span>
+            </div>
+            <div class="config-item" data-setting="lives">
+                <span>PLAYER LIVES</span>
+                <span class="value">3</span>
+            </div>
+            <div class="config-item" data-setting="extend">
+                <span>EXTEND SCORE</span>
+                <span class="value">500000</span>
+            </div>
+            <BR>
+            <div class="config-item" data-setting="sound">
+                <span>SOUND TEST</span>
+                <span class="value">< SHOP ></span>
+            </div>
+            <div class="config-item" data-setting="bgm">
+                <span>BGM TEST</span>
+                <span class="value">< STAGE1 ></span>
+            </div>
+            <BR>
+            <div class="config-item" data-setting="reset_score">
+                <span>HI-SCORE RESET</span>
+                <span class="value">EXECUTE</span>
+            </div>
+            <BR>
+            <div class="config-item" data-setting="exit">
+                <span style="color: #0FF;">> SAVE AND EXIT</span>
+            </div>
+        </div>
+
+        <p style="font-size: 10px; margin-top: 30px; color: #888;">
+            USE UP/DOWN TO SELECT<br>
+            USE LEFT/RIGHT TO CHANGE
+        </p>
     </div>
 </div>
 

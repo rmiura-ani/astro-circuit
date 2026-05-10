@@ -19,7 +19,7 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
-        this.version = "0.28";
+        this.version = "0.29";
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
 
         // --- サブシステム ---
@@ -312,7 +312,7 @@ class Game {
     // toggleWeapon ではこのメソッドを呼ぶだけにする
     toggleWeapon() {
         this.weaponMode = (this.weaponMode === 'STRAIGHT') ? 'WIDE' : 'STRAIGHT';
-        this.audio.playPowerUp();
+        this.audio.playChangeWp();
         this.updateWeaponUI(); // 更新
     }
 
@@ -379,6 +379,7 @@ class Game {
 
             currentBullets.forEach(bullet => {
                 if (!bullet.active) return; // すでに他の敵に当たっていたらスキップ
+                if (!enemy.active) return;  // ★ 追加：このループ（他の弾の計算）ですでに敵が倒されていたらスキップ
 
                 if (this.isHit(bullet, enemy)) {
                     bullet.active = false; // 弾を消す

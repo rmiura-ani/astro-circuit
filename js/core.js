@@ -82,9 +82,10 @@ class AudioManager {
             BGM: { 'stage1': 'bgm-stage1.mp3' },
             SE: {
                 shot:      { file: 'shot.wav',      vol: 0.3 },
+                changeWp:  { file: 'changeWp.wav',  vol: 0.8 },
                 explosion: { file: 'explosion.wav', vol: 0.3 },
                 hitHurt:   { file: 'hitHurt.wav',   vol: 0.5 },
-                powerUp:   { file: 'powerUp.wav',   vol: 0.7 }
+                powerUp:   { file: 'powerUp.wav',   vol: 0.7 },                
             }
         };
 
@@ -170,6 +171,7 @@ class AudioManager {
 
     // ショートカットメソッド
     playShot() { this._playSE('shot'); }
+    playChangeWp() { this._playSE('changeWp'); }
     playExplosion() { this._playSE('explosion'); }
     playHitSound() { this._playSE('hitHurt'); }
     playPowerUp() { this._playSE('powerUp'); }

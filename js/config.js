@@ -37,6 +37,8 @@ class ConfigManager {
         this.screenEl = document.getElementById('config-screen');
         this.startScreenEl = document.getElementById('start-screen');
         this.items = []; // open時に取得
+
+        this.resetConfirmed = false; // リセットの確認状態を保持
     }
 
     /** 設定画面を開く */
@@ -117,11 +119,69 @@ class ConfigManager {
 
     /** 決定ボタン（Z/Space/Click）時のアクション */
     handleAction() {
-        const setting = this.items[this.currentIndex].dataset.setting;
+        const item = this.items[this.currentIndex];
+        const setting = item.dataset.setting;
 
         if (setting === 'sound') this.playBackSoundTest();
         if (setting === 'bgm') this.playBackBGMTest();
-        if (setting === 'exit') { this.saveConfig(); this.close(); }
+
+        // --- HI-SCORE RESET 2段階処理 ---
+        if (setting === 'reset_score') {
+            if (!this.resetConfirmed) {
+                // 1段階目：確認状態へ
+                this.resetConfirmed = true;
+                this.game.audio.playHitSound();
+                item.classList.add('danger');
+                const valEl = item.querySelector('.value');
+                if (valEl) valEl.innerText = "SURE?";
+            } else {
+                // 2段階目：実行！
+                this.executeHighScoreReset();
+                this.resetConfirmed = false;
+                item.classList.remove('danger');
+            }
+        } else {
+            // 他の項目でアクションが起きたら確認状態を解除
+            this.cancelResetConfirm();
+        }
+
+        if (setting === 'exit') { 
+            this.saveConfig(); 
+            this.close(); 
+        }
+    }
+
+    /** 確認状態のキャンセル処理 */
+    cancelResetConfirm() {
+        this.resetConfirmed = false;
+        this.items.forEach(item => {
+            item.classList.remove('danger');
+            if (item.dataset.setting === 'reset_score') {
+                const valEl = item.querySelector('.value');
+                if (valEl) valEl.innerText = "EXECUTE";
+            }
+        });
+    }
+
+    /** ハイスコアを物理的に削除する */
+    executeHighScoreReset() {
+        this.game.audio.playExplosion(); // 破壊音！
+        this.game.visualEffectWarning(); // 画面を赤くフラッシュさせる
+
+        localStorage.removeItem('void_circuit_highscore');
+        this.game.highScore = 0;
+        this.game.updateScoreUI();
+
+        const valEl = this.items[this.currentIndex].querySelector('.value');
+        if (valEl) {
+            valEl.innerText = "PURGED!!";
+            valEl.style.color = "#0FF"; // 完了後はシアン色に
+            setTimeout(() => {
+                valEl.innerText = "EXECUTE";
+                valEl.style.color = "";
+            }, 2000);
+        }
+        console.log("SYSTEM: HI-SCORE DATA PURGED.");
     }
 
     /** チートコマンド（Cキー7回） */
@@ -171,30 +231,33 @@ class ConfigManager {
         this.items.forEach((item, index) => {
             item.classList.toggle('active', index === this.currentIndex);
         });
+        if (this.resetConfirmed) {
+            this.cancelResetConfirm();
+        }
     }
 
     /** マウスイベントの登録 */
     setupMouseEvents() {
         this.items.forEach((item, index) => {
-            // クリックで値変更 or アクション
             item.onclick = (e) => {
                 e.stopPropagation();
-                this.currentIndex = index;
-                this.updateSelection();
                 
-                if (item.dataset.setting === 'exit') {
-                    this.saveConfig();
-                    this.handleAction();
+                // すでに選択されている項目をもう一度クリックした場合、または新規選択
+                if (this.currentIndex === index) {
+                    this.handleAction(); // 2回目なら実行、1回目ならSURE?へ
                 } else {
-                    this.handleValueChange(true); // 右クリック扱いで値を回す
-                    this.handleAction(); // 音鳴らしなど
+                    this.currentIndex = index;
+                    this.updateSelection();
+                    // 項目が変わった直後のクリックなら1段階目として扱う
+                    this.handleAction(); 
                 }
             };
 
-            // ホバーで選択枠移動
             item.onmouseenter = () => {
-                this.currentIndex = index;
-                this.updateSelection();
+                if (this.currentIndex !== index) {
+                    this.currentIndex = index;
+                    this.updateSelection(); // ここで自動的に cancelResetConfirm が走る
+                }
             };
         });
     }

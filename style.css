@@ -2,8 +2,8 @@
     /* --- LAYER MANAGEMENT (z-index) --- */
     --z-base: 0;
     --z-game-canvas: 10;
-    --z-ui-hud: 50;
     --z-screen-overlay: 100;
+    --z-ui-hud: 150;
     --z-config-system: 200;
 
     /* --- COLORS (VOID-CIRCUIT THEME) --- */
@@ -267,6 +267,17 @@ canvas {
 
 .config-item.active .value {
     animation: blink 0.5s infinite;
+}
+
+/* 警告状態（SURE?）の時の特別色 */
+.config-item.active.danger {
+    background: #f00 !important; /* 背景を真っ赤に */
+    color: #fff !important;       /* 文字は白抜きでクッキリ */
+}
+
+/* 点滅させるとさらに「警告」っぽさが増します */
+.config-item.active.danger .value {
+    animation: blink-fast 0.2s infinite;
 }
 
 #config-screen p {
