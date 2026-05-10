@@ -192,6 +192,8 @@ class ConfigManager {
         this.debugCCount = 0; // カウントリセット
         this.game.isInvincibleCheat = !this.game.isInvincibleCheat;
 
+        if (this.game.updateDebugInfo) this.game.updateDebugInfo();
+
         if (this.game.isInvincibleCheat) {
             this.game.cheatUsedInSession = true;
             this.game.audio.playPowerUp();

@@ -19,7 +19,7 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
-        this.version = "0.29";
+        this.version = "0.30";
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
 
         // --- サブシステム ---
@@ -291,7 +291,7 @@ class Game {
             this.checkCollisions();
             this.checkClearCondition();
         }
-
+        this.updateDebugInfo();
         this.updateEntities();
     }
 
@@ -509,29 +509,44 @@ class Game {
     }
 
     showStartScreen(msg, isNew) {
+        // --- MISSION文字列の生成 (generateShareTextのロジックを流用) ---
+        const rawPath = this.enemyManager.scenarioPath || 'UNKNOWN';
+        const opName = rawPath.split('/').pop().replace('.json', '').toUpperCase();
+        const diff = { 'EASY':'E', 'NORMAL':'N', 'HARD':'H', 'VERY HARD':'VH' }[this.config.difficulty];
+        const cheat = this.cheatUsedInSession ? '(CHT)' : ''; // リザルト用は少し短く
+        const extend = this.config.extend === 'NONE' ? 'OFF' : `${(this.config.extend/1000)}k`;
+        
+        const missionCode = `${opName}-${diff}${cheat}-${extend}`;
+
+        // --- 統計データの計算 ---
         const accuracy = this.stats.shotsFired > 0 
             ? Math.floor((this.stats.shotsHit / this.stats.shotsFired) * 100) 
             : 0;
 
+        // --- リザルト表示用HTML ---
         const statsHtml = `
+            <div class="mission-header">
+                MISSION: ${missionCode}
+            </div>
             <div class="stats-container">
                 <div class="stats-row"><span class="stats-label">KILLS:</span><span class="stats-value">${this.stats.enemiesKilled} / ${this.stats.enemiesSpawned}</span></div>
-                <div class="stats-row"><span class="stats-label">ACCURACY:</span><span class="stats-value">${accuracy}%</span></div>
-                <div class="stats-row"><span class="stats-label">TOTAL SCORE:</span><span class="stats-value">${this.score.toLocaleString()}</span></div>
+                <div class="stats-row"><span class="stats-label">HIT RATE:</span><span class="stats-value">${accuracy}%</span></div>
             </div>
         `;
 
-        const hiMsg = isNew ? `<br><span class="new-record">★ NEW HI-SCORE !! ★</span>` : "";
+        const hiMsg = isNew ? `<div class="new-record">★ NEW HI-SCORE !! ★</div>` : "";
         const screen = document.getElementById('start-screen');
-        screen.style.display = 'flex';
-        
-        // メッセージとスタッツ、リトライ案内を合体
-        screen.querySelector('p').innerHTML = `
-            <span style="color:var(--color-cyan); font-size:16px;">${msg}</span>
+        const pEl = screen.querySelector('p');
+
+        // スコア表示と合体
+        pEl.innerHTML = `
+            <div class="result-msg">${msg}</div>
             ${statsHtml}
             ${hiMsg}
             <br>RETRY OPERATION?
         `;
+        
+        screen.style.display = 'flex';
     }
 
     setupShareButton() {
@@ -586,6 +601,17 @@ class Game {
         }
     }
 
+    updateDebugInfo() {
+        const debugEl = document.getElementById('debug-info');
+        if (this.isInvincibleCheat) {
+            debugEl.style.display = 'block';
+            document.getElementById('debug-frame').innerText = this.frame;
+            document.getElementById('debug-index').innerText = 
+                `${this.enemyManager.currentIndex} / ${this.enemyManager.scenario.length}`;
+        } else {
+            debugEl.style.display = 'none';
+        }
+    }
     updateLivesUI() {
         const el = document.getElementById('lives-display');
         if (!el) return;
