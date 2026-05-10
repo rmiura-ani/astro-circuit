@@ -13,7 +13,7 @@
  */
 class Game {
     constructor() {
-        this.VERSION = "0.34";
+        this.VERSION = "0.35";
         this.REQUIRED_SCENARIO_VER = "0.1";
 
         // --- 基本設定 ---

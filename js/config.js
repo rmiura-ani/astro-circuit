@@ -244,21 +244,32 @@ class ConfigManager {
             item.onclick = (e) => {
                 e.stopPropagation();
                 
-                // すでに選択されている項目をもう一度クリックした場合、または新規選択
-                if (this.currentIndex === index) {
-                    this.handleAction(); // 2回目なら実行、1回目ならSURE?へ
-                } else {
+                // まずクリックされた項目を選択状態にする
+                if (this.currentIndex !== index) {
                     this.currentIndex = index;
                     this.updateSelection();
-                    // 項目が変わった直後のクリックなら1段階目として扱う
-                    this.handleAction(); 
+                }
+
+                const setting = item.dataset.setting;
+
+                // 1. 値の変更を伴う項目の場合 (Difficulty, Lives, Extend, Sound, BGM)
+                // 左右キーの代わりとして、右クリックや中央クリックの判定をしない限りは
+                // 「クリック＝右に進む」という挙動にするのが自然です
+                if (this.OPTIONS[setting] || setting === 'sound' || setting === 'bgm') {
+                    this.handleValueChange(true); // true を渡して右送り(進む)にする
+                    this.game.audio.playHitSound(); // ポチポチ音を鳴らすと心地よいです
+                } 
+                
+                // 2. アクションを実行する項目の場合 (Reset, Exit, およびテスト再生)
+                else {
+                    this.handleAction();
                 }
             };
 
             item.onmouseenter = () => {
                 if (this.currentIndex !== index) {
                     this.currentIndex = index;
-                    this.updateSelection(); // ここで自動的に cancelResetConfirm が走る
+                    this.updateSelection();
                 }
             };
         });
