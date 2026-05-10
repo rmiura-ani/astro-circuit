@@ -18,7 +18,7 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.width = 320;
         this.height = 480;
-        this.version = "0.32";
+        this.version = "0.33";
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
 
         // --- サブシステム ---
@@ -57,6 +57,7 @@ class Game {
         this.gameOverTimer = 0;
         this.clearTimer = 0;
         this.escCount = 0;
+        this.escTimer = null;
 
         this.entities = [];
         this.particles = [];
@@ -218,17 +219,31 @@ class Game {
     }
 
     handleEmergencyEscape() {
+        // 前回のタイマーが動いていたらキャンセルする（重要！）
+        if (this.escTimer) {
+            clearTimeout(this.escTimer);
+        }
+
         this.escCount++;
         this.visualEffectWarning();
+
         if (this.escCount >= 2) {
             this.escCount = 0;
-            this.currentLives = 1;
-            this.onPlayerMiss();
+            this.escTimer = null; // リセット
+            
+            // 確実にリザルトへ送る
+            this.currentLives = 0;
+            this.onPlayerMiss(); // 爆発演出
+            this.endSession("EMERGENCY EXIT");
         } else {
-            setTimeout(() => { this.escCount = 0; }, 1000);
+            // 1秒以内に2回目が来なければカウントを戻す
+            this.escTimer = setTimeout(() => {
+                this.escCount = 0;
+                this.escTimer = null;
+                console.log("ESC COUNT RESET");
+            }, 1000);
         }
     }
-
     visualEffectWarning() {
         const container = document.getElementById('game-container');
         if (!container) return;

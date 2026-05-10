@@ -74,6 +74,7 @@ class AudioManager {
     constructor(assetBase) {
         this.assetBase = assetBase;
         this.currentBgm = null;
+        this.fadeInterval = null; // ★ ここに追加：タイマーを保持する場所
         this.sounds = {};
         this.bgms = {};
         
@@ -135,7 +136,18 @@ class AudioManager {
 
     /** 再生中の BGM を停止して状態をリセットする */
     resetBGM() {
-        this.stopAllBGM();
+        // ★ 追加：動いているフェード処理を強制停止！
+        if (this.fadeInterval) {
+            clearInterval(this.fadeInterval);
+            this.fadeInterval = null;
+        }
+
+        // 全てのBGMの音量をリセット
+        Object.values(this.bgms).forEach(b => {
+            b.pause();
+            b.currentTime = 0;
+            b.volume = 0.7; // ★ 初期音量に戻す
+        });
         this.currentBgm = null;
     }
 
@@ -143,19 +155,24 @@ class AudioManager {
     fadeOutBGM(duration = 2000) {
         if (!this.currentBgm) return;
 
+        // ★ もし既にフェード中なら、古いタイマーを消しておく（二重実行防止）
+        if (this.fadeInterval) clearInterval(this.fadeInterval);
+
         const target = this.currentBgm;
         const startVol = target.volume;
         const intervalTime = 50;
         const steps = duration / intervalTime;
         const volStep = startVol / steps;
 
-        const timer = setInterval(() => {
+        // ★ ローカルの timer ではなく this.fadeInterval に入れる
+        this.fadeInterval = setInterval(() => {
             if (target.volume > volStep) {
                 target.volume -= volStep;
             } else {
                 target.volume = 0;
                 target.pause();
-                clearInterval(timer);
+                clearInterval(this.fadeInterval);
+                this.fadeInterval = null; // 終わったら空にする
             }
         }, intervalTime);
     }
