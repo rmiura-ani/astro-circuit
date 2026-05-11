@@ -2,14 +2,13 @@
  * PROJECT: VOID-CIRCUIT
  *
  * config.js
- * 
- * Copyright (c) 2026 あに。部長 / Ryo Miura
+ * * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
 
 /**
- * 設定画面（BIOS風）を管理するクラス (v0.25 Refactored)
+ * 設定画面（BIOS風）を管理するクラス
  */
 class ConfigManager {
     constructor(game) {
@@ -36,9 +35,9 @@ class ConfigManager {
         // --- DOM要素 ---
         this.screenEl = document.getElementById('config-screen');
         this.startScreenEl = document.getElementById('start-screen');
-        this.items = []; // open時に取得
+        this.items = [];
 
-        this.resetConfirmed = false; // リセットの確認状態を保持
+        this.resetConfirmed = false;
     }
 
     /** 設定画面を開く */
@@ -47,15 +46,16 @@ class ConfigManager {
         this.startScreenEl.style.display = 'none';
         this.screenEl.style.display = 'flex';
         
-        // 最新のDOM状態を取得してイベント登録
+        // 最新のDOM状態を取得
         this.items = Array.from(document.querySelectorAll('.config-item'));
+        
+        // イベントの登録（二重登録防止のため一回解除してから登録）
         this.setupMouseEvents();
         
-        // 現在の値に合わせて表示を初期化
         this.refreshAllDisplay();
         this.updateSelection();
 
-        this.game.audio.resetBGM();
+        if (this.game.audio) this.game.audio.resetBGM();
     }
 
     /** 設定画面を閉じる */
@@ -63,7 +63,7 @@ class ConfigManager {
         this.isMode = false;
         this.screenEl.style.display = 'none';
         this.startScreenEl.style.display = 'flex';
-        this.game.audio.resetBGM();
+        if (this.game.audio) this.game.audio.resetBGM();
     }
 
     /** キー入力処理 */
@@ -96,20 +96,18 @@ class ConfigManager {
     /** 値の変更処理 */
     handleValueChange(isRight) {
         const item = this.items[this.currentIndex];
+        if (!item) return;
         const setting = item.dataset.setting;
 
         if (this.OPTIONS[setting]) {
-            // 通常設定項目 (Difficulty, Lives, Extend)
             const options = this.OPTIONS[setting];
             let idx = options.indexOf(this[setting]);
             idx = isRight ? (idx + 1) % options.length : (idx - 1 + options.length) % options.length;
             this[setting] = options[idx];
         } else if (setting === 'sound') {
-            // SEテスト
             const len = this.game.audio.seCount;
             this.soundTestIndex = isRight ? (this.soundTestIndex + 1) % len : (this.soundTestIndex - 1 + len) % len;
         } else if (setting === 'bgm') {
-            // BGMテスト
             const len = this.game.audio.bgmCount;
             this.bgmTestIndex = isRight ? (this.bgmTestIndex + 1) % len : (this.bgmTestIndex - 1 + len) % len;
         }
@@ -117,7 +115,7 @@ class ConfigManager {
         this.refreshDisplay(item);
     }
 
-    /** 決定ボタン（Z/Space/Click）時のアクション */
+    /** 決定時のアクション */
     handleAction() {
         const item = this.items[this.currentIndex];
         const setting = item.dataset.setting;
@@ -125,23 +123,19 @@ class ConfigManager {
         if (setting === 'sound') this.playBackSoundTest();
         if (setting === 'bgm') this.playBackBGMTest();
 
-        // --- HI-SCORE RESET 2段階処理 ---
         if (setting === 'reset_score') {
             if (!this.resetConfirmed) {
-                // 1段階目：確認状態へ
                 this.resetConfirmed = true;
-                this.game.audio.playHitSound();
+                if (this.game.audio) this.game.audio.playHitSound();
                 item.classList.add('danger');
                 const valEl = item.querySelector('.value');
                 if (valEl) valEl.innerText = "SURE?";
             } else {
-                // 2段階目：実行！
                 this.executeHighScoreReset();
                 this.resetConfirmed = false;
                 item.classList.remove('danger');
             }
         } else {
-            // 他の項目でアクションが起きたら確認状態を解除
             this.cancelResetConfirm();
         }
 
@@ -151,7 +145,6 @@ class ConfigManager {
         }
     }
 
-    /** 確認状態のキャンセル処理 */
     cancelResetConfirm() {
         this.resetConfirmed = false;
         this.items.forEach(item => {
@@ -163,57 +156,49 @@ class ConfigManager {
         });
     }
 
-    /** ハイスコアを物理的に削除する */
     executeHighScoreReset() {
-        this.game.audio.playExplosion(); // 破壊音！
-        this.game.visualEffectWarning(); // 画面を赤くフラッシュさせる
+        if (this.game.audio) this.game.audio.playExplosion();
+        if (this.game.visualEffectWarning) this.game.visualEffectWarning();
 
         localStorage.removeItem('void_circuit_highscore');
         this.game.highScore = 0;
-        this.game.updateScoreUI();
+        if (this.game.updateScoreUI) this.game.updateScoreUI();
 
         const valEl = this.items[this.currentIndex].querySelector('.value');
         if (valEl) {
             valEl.innerText = "PURGED!!";
-            valEl.style.color = "#0FF"; // 完了後はシアン色に
+            valEl.style.color = "#0FF";
             setTimeout(() => {
                 valEl.innerText = "EXECUTE";
                 valEl.style.color = "";
             }, 2000);
         }
-        console.log("SYSTEM: HI-SCORE DATA PURGED.");
     }
 
-    /** チートコマンド（Cキー7回） */
     handleCheatCommand() {
         this.debugCCount++;
         if (this.debugCCount < 7) return;
+        this.debugCCount = 0;
 
-        this.debugCCount = 0; // カウントリセット
         this.game.isInvincibleCheat = !this.game.isInvincibleCheat;
-
         if (this.game.updateDebugInfo) this.game.updateDebugInfo();
 
         if (this.game.isInvincibleCheat) {
             this.game.cheatUsedInSession = true;
-            this.game.audio.playPowerUp();
+            if (this.game.audio) this.game.audio.playPowerUp();
             this.screenEl.style.color = "#FFD700";
             this.screenEl.style.textShadow = "0 0 10px #FFF";
-            console.log("CHEAT: ENABLED (Invincible)");
         } else {
-            this.game.audio.playExplosion();
+            if (this.game.audio) this.game.audio.playExplosion();
             this.screenEl.style.color = "";
             this.screenEl.style.textShadow = "";
-            console.log("CHEAT: DISABLED");
         }
     }
 
-    /** 表示の全更新 */
     refreshAllDisplay() {
         this.items.forEach(item => this.refreshDisplay(item));
     }
 
-    /** 特定項目の表示更新 */
     refreshDisplay(item) {
         const setting = item.dataset.setting;
         const valEl = item.querySelector('.value');
@@ -228,40 +213,30 @@ class ConfigManager {
         }
     }
 
-    /** 選択枠の更新 */
     updateSelection() {
         this.items.forEach((item, index) => {
             item.classList.toggle('active', index === this.currentIndex);
         });
-        if (this.resetConfirmed) {
-            this.cancelResetConfirm();
-        }
+        if (this.resetConfirmed) this.cancelResetConfirm();
     }
 
-    /** マウスイベントの登録 */
     setupMouseEvents() {
         this.items.forEach((item, index) => {
+            // 前回のイベントをクリアして二重登録を防ぐ
+            item.onclick = null;
+            item.onmouseenter = null;
+
             item.onclick = (e) => {
                 e.stopPropagation();
-                
-                // まずクリックされた項目を選択状態にする
                 if (this.currentIndex !== index) {
                     this.currentIndex = index;
                     this.updateSelection();
                 }
-
                 const setting = item.dataset.setting;
-
-                // 1. 値の変更を伴う項目の場合 (Difficulty, Lives, Extend, Sound, BGM)
-                // 左右キーの代わりとして、右クリックや中央クリックの判定をしない限りは
-                // 「クリック＝右に進む」という挙動にするのが自然です
                 if (this.OPTIONS[setting] || setting === 'sound' || setting === 'bgm') {
-                    this.handleValueChange(true); // true を渡して右送り(進む)にする
-                    this.game.audio.playHitSound(); // ポチポチ音を鳴らすと心地よいです
-                } 
-                
-                // 2. アクションを実行する項目の場合 (Reset, Exit, およびテスト再生)
-                else {
+                    this.handleValueChange(true);
+                    if (this.game.audio) this.game.audio.playHitSound();
+                } else {
                     this.handleAction();
                 }
             };
@@ -275,11 +250,9 @@ class ConfigManager {
         });
     }
 
-    // --- オーディオ実行ヘルパー ---
     playBackSoundTest() { this.game.audio.playSEByIndex(this.soundTestIndex); }
     playBackBGMTest() { this.game.audio.playBGMByIndex(this.bgmTestIndex); }
 
-    // 保存用メソッド
     saveConfig() {
         const configData = {
             difficulty: this.difficulty,
@@ -289,7 +262,6 @@ class ConfigManager {
         localStorage.setItem('void_circuit_config', JSON.stringify(configData));
     }
 
-    // 読み込み用メソッド
     loadConfig() {
         const saved = localStorage.getItem('void_circuit_config');
         if (saved) {
@@ -297,7 +269,7 @@ class ConfigManager {
             this.difficulty = data.difficulty || 'NORMAL';
             this.lives = data.lives || 3;
             this.extend = data.extend || 500000;
-            this.refreshAllDisplay(); // メニューの表示を同期
+            this.refreshAllDisplay();
         }
     }
 }

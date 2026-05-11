@@ -14,7 +14,6 @@
 class Game {
     constructor() {
         this.VERSION = "0.36";
-        this.REQUIRED_SCENARIO_VER = "0.1";
 
         // --- 基本設定 ---
         this.canvas = document.getElementById('game-canvas');
@@ -22,14 +21,15 @@ class Game {
         this.width = 320;
         this.height = 480;
         this.assetBase = "https://void-circuit-assets.ani-net.com/";
-        this.scenarioDisplayName = 'NONE'
 
         // --- サブシステム ---
         this.input = new InputManager(this.canvas);
         this.audio = new AudioManager();
-        this.stars = new Starfield(this.width, this.height);
         this.config = new ConfigManager(this);
         this.config.loadConfig();
+        this.assets = new AssetManager(); // entities.js で定義
+        this.enemyManager = new EnemyManager();
+        this.stars = new Starfield(this.width, this.height);
 
         // --- ゲーム内部状態 ---
         this._score = 0;
@@ -53,7 +53,6 @@ class Game {
         this.isShowingCredits = false;
         this.isCleared = false;
         this.isInvincibleCheat = false;
-        this.isBgmFading = false;
         this.weaponMode = 'STRAIGHT';
 
         this.frame = 0;
@@ -65,7 +64,6 @@ class Game {
         this.entities = [];
         this.particles = [];
         this.player = null;
-        this.enemyManager = null;
         this.idleTimeout = null;
 
         this.difficultyParams = {
@@ -119,34 +117,26 @@ class Game {
         document.getElementById('version-display').innerText = this.VERSION;
         document.getElementById('config-open-btn').style.display = 'none';
 
-        const urlParams = new URLSearchParams(window.location.search);
-        let branch = urlParams.get('branch') || 'main'; // 指定がなければ main
-        this.assetBase = `https://raw.githubusercontent.com/rmiura-ani/void-circuit-assets/refs/heads/${branch}/`;
-
         try {
-            const scenarioPath = this.assetBase + 'scenario.json';
-            const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
-            if (isLocal) {
-                const scenarioPath = './scenario.json'; // ローカル時はカレントディレクトリ
-                branch = 'local';
-            }
+            const urlParams = new URLSearchParams(window.location.search);
+            let branch = urlParams.get('branch') || 'main'; // 指定がなければ main
+            this.assetBase = `https://raw.githubusercontent.com/rmiura-ani/void-circuit-assets/refs/heads/${branch}/`;
+            const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname); // デバック用にローカル優先
+            const scenarioPath = isLocal ? './scenario.json' : this.assetBase + 'scenario.json';
+            const displayBranch = isLocal ? 'local' : branch;
 
-            const res = await fetch(scenarioPath);
-            if (!res.ok) throw new Error("Fetch failed");
-            const scenarioData = await res.json();
-
-            // ★ バージョンチェック
-            const scenarioVer = parseFloat(scenarioData.version || "0.1");
-            if (scenarioVer < this.REQUIRED_SCENARIO_VER) {
-                throw new Error(`Scenario Version Error: v${scenarioVer} is too old. Required: v${this.REQUIRED_SCENARIO_VER}`);
-            }
-
-            this.enemyManager = new EnemyManager(scenarioData);
+            // 1. シナリオロード
+            await this.enemyManager.loadScenario(scenarioPath, displayBranch);
             
-            this.scenarioDisplayName = branch.toUpperCase();
-
-            this.audio.initAudio(this.assetBase); // AudioManager側にもベースURLを伝える
-            await this.preloadAssets();
+            // 2. オーディオ初期化とプリロード
+            this.audio.initAudio(this.assetBase);
+            const audioTask = this.audio.preloadAll();
+            
+            // 3. 画像プリロード
+            const imageTask = this.assets.loadImages(this.assetBase);
+            
+            // 全てのロード完了を並列で待つ（効率的！）
+            await Promise.all([audioTask, imageTask]);
 
             this.isLoaded = true;
             this.updateScoreUI();
@@ -159,35 +149,6 @@ class Game {
             console.error(e);
             this.setStartMessage("❌ ERROR: Failed to Load Assets", "#F44");
         }
-    }
-
-    async preloadAssets() {
-        const loadAud = (a) => new Promise(r => {
-            if (!a || !a.src || a.readyState >= 3) return r();
-            a.addEventListener('canplaythrough', r, { once: true });
-            a.addEventListener('error', r, { once: true });
-            a.load();
-            setTimeout(r, 5000);
-        });
-
-        const loadImg = (url) => new Promise(r => {
-            const img = new Image();
-            img.onload = () => r(img);
-            img.onerror = () => r(null);
-            img.src = url;
-        });
-
-        const bgmPromises = Object.values(this.audio.bgms).map(loadAud);
-        const sePromises = Object.values(this.audio.sounds).map(loadAud);
-        const imagesToLoad = [
-            this.assetBase + 'player.png',
-            this.assetBase + 'enemy_straight.png',
-            this.assetBase + 'enemy_sine.png',
-            this.assetBase + 'enemy_station.png'
-        ];
-        const imgPromises = imagesToLoad.map(url => loadImg(url));
-
-        await Promise.all([...bgmPromises, ...sePromises, ...imgPromises]);
     }
 
     setStartMessage(text, color) {
@@ -285,7 +246,7 @@ class Game {
     }
 
     reset() {
-        this.player = new Player(this.assetBase, this.width / 2 - 16, this.height - 80);
+        this.player = new Player(this, this.width / 2 - 16, this.height - 80);
         this.entities = [];
         this.particles = [];
         this.frame = 0;
@@ -294,7 +255,7 @@ class Game {
 
         // 手順 A: 開始時セッションレコードの保存
         this.sessionRecord = {
-            missionName: this.scenarioDisplayName,
+            missionName: this.enemyManager.displayName,
             difficulty: this.config.difficulty,
             extend: this.config.extend,
             lives: this.config.lives,
@@ -315,7 +276,6 @@ class Game {
         this.gameOverTimer = 0;
         this.clearTimer = 0;
         this.isCleared = false;
-        this.isBgmFading = false;
         this.enemyManager.reset();
         this.audio.resetBGM();
         this.weaponMode = 'STRAIGHT';
@@ -418,18 +378,31 @@ class Game {
         const currentEnemies = this.entities.filter(e => e instanceof Enemy && e.active);
         const currentBullets = this.entities.filter(b => b instanceof Bullet && b.active);
 
-        currentEnemies.forEach(enemy => {
-            if (enemy.y < 20) return;
+currentEnemies.forEach(enemy => {
+            if (enemy.y + enemy.height < 30) return;
             currentBullets.forEach(bullet => {
                 if (!bullet.active || !enemy.active) return;
                 if (this.isHit(bullet, enemy)) {
                     bullet.active = false;
                     this.stats.shotsHit++;
+                    
                     if (enemy.takeDamage(1)) {
+                        // --- 敵が撃沈した時の処理 ---
                         this.score += 50 * enemy.maxHp * (enemy.maxHp + 1);
                         this.stats.enemiesKilled++;
-                        this.createExplosion(enemy.x + 16, enemy.y + 16, enemy);
+
+                        // ★ ここを追加：個別死亡演出（ボスなどの連鎖爆発）があるか確認
+                        if (typeof enemy.onDie === 'function') {
+                            enemy.onDie(this); // gameインスタンス(this)を渡す
+                        }
+
+                        // 爆発エフェクトの発生位置を「敵の中心」に修正
+                        const centerX = enemy.x + enemy.width / 2;
+                        const centerY = enemy.y + enemy.height / 2;
+                        this.createExplosion(centerX, centerY, enemy);
+                        
                     } else {
+                        // --- 敵に弾が当たったが、まだ生きている時の処理 ---
                         this.score += 10;
                         this.audio.playHitSound();
                         this.particles.push(new Particle(bullet.x, bullet.y));
@@ -440,8 +413,21 @@ class Game {
     }
 
     isHit(r1, r2) {
-        return r1.x < r2.x + r2.width && r1.x + r1.width > r2.x &&
-               r1.y < r2.y + r2.height && r1.y + r1.height > r2.y;
+        // 判定に使うサイズを決定（hitWidthがあれば優先、なければ通常のサイズ）
+        const w1 = r1.hitWidth || r1.width;
+        const h1 = r1.hitHeight || r1.height;
+        const w2 = r2.hitWidth || r2.width;
+        const h2 = r2.hitHeight || r2.height;
+
+        // それぞれの中心座標を計算
+        const r1cx = r1.x + r1.width / 2;
+        const r1cy = r1.y + r1.height / 2;
+        const r2cx = r2.x + r2.width / 2;
+        const r2cy = r2.y + r2.height / 2;
+
+        // 中心からの距離ベースで判定
+        return Math.abs(r1cx - r2cx) < (w1 + w2) / 2 &&
+            Math.abs(r1cy - r2cy) < (h1 + h2) / 2;
     }
 
     checkClearCondition() {
@@ -485,12 +471,30 @@ class Game {
     }
 
     draw() {
+        // 1. 背景
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.width, this.height);
         this.stars.draw(this.ctx);
+
         if (!this.player) return;
-        this.entities.forEach(e => e.draw(this.ctx));
+
+        // 2. 弾やエフェクト（一番下）
+        this.entities.forEach(e => {
+            if (e instanceof Bullet || e instanceof EnemyBullet) e.draw(this.ctx);
+        });
         this.particles.forEach(p => p.draw(this.ctx));
+
+        // 3. 雑魚敵（弾の上、ボスの下）
+        this.entities.forEach(e => {
+            if (e instanceof Enemy && !(e instanceof BossEnemy)) e.draw(this.ctx, this.isInvincibleCheat);
+        });
+
+        // 4. ボス（敵の中で一番上）
+        this.entities.forEach(e => {
+            if (e instanceof BossEnemy) e.draw(this.ctx, this.isInvincibleCheat);
+        });
+
+        // 5. 自機とUI（最前面）
         this.player.draw(this.ctx);
         this.drawOverlayMessages();
     }

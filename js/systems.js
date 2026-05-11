@@ -1,83 +1,80 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * core.js
- * 
+ * systems.js - Stage & Asset Management
  * Copyright (c) 2026 あに。部長 / Ryo Miura
- * Licensed under the MIT License (see LICENSE file)
- * Note: Included assets are the property of their respective owners.
  */
 
 /**
- * 入力管理：キーボード、マウス、タッチを統合
+ * InputManager: 入力統合管理
+ * キーボード、マウス、タッチの入力を正規化して保持します。
  */
 class InputManager {
     constructor(canvas) {
         this.canvas = canvas;
-        this.keys = {};
+        this.keys = new Set(); // Setを使って重複を防止
         this.touchX = null;
         this.touchY = null;
         this.isTouching = false;
 
-        this.setupEventListeners();
+        this._setupEventListeners();
     }
 
-    /** イベントリスナーを初期化し、入力をキャプチャする */
-    setupEventListeners() {
+    _setupEventListeners() {
         // キーボード
-        window.addEventListener('keydown', (e) => this.keys[e.code] = true);
-        window.addEventListener('keyup', (e) => this.keys[e.code] = false);
+        window.addEventListener('keydown', (e) => this.keys.add(e.code));
+        window.addEventListener('keyup', (e) => this.keys.delete(e.code));
 
-        // マウス/タッチ共通：座標計算をメソッド化
-        const updatePos = (e) => this.handleCoordinate(e);
+        const updatePos = (e) => this._handleCoordinate(e);
 
         // マウス
         this.canvas.addEventListener('mousedown', (e) => { this.isTouching = true; updatePos(e); });
         window.addEventListener('mousemove', (e) => { if (this.isTouching) updatePos(e); });
         window.addEventListener('mouseup', () => { this.isTouching = false; });
 
-        // タッチ
+        // タッチ (iOS/Android 向け最適化)
+        const touchOptions = { passive: false };
         this.canvas.addEventListener('touchstart', (e) => {
             this.isTouching = true;
             updatePos(e);
             if (e.cancelable) e.preventDefault();
-        }, { passive: false });
+        }, touchOptions);
 
         this.canvas.addEventListener('touchmove', (e) => {
             updatePos(e);
             if (e.cancelable) e.preventDefault();
-        }, { passive: false });
+        }, touchOptions);
 
         this.canvas.addEventListener('touchend', () => { this.isTouching = false; });
     }
 
-    /** 入力座標をキャンバスのローカル座標に変換する */
-    handleCoordinate(e) {
+    _handleCoordinate(e) {
         if (!this.canvas) return;
         const rect = this.canvas.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
         
-        // スケーリングを考慮した座標変換
-        this.touchX = (clientX - rect.left) * (this.canvas.width / rect.width);
-        this.touchY = (clientY - rect.top) * (this.canvas.height / rect.height);
+        // 論理サイズと実表示サイズの比率を計算
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+
+        this.touchX = (clientX - rect.left) * scaleX;
+        this.touchY = (clientY - rect.top) * scaleY;
     }
 
-    /** 指定キーが押されているかを判定する */
-    isPressed(keyCode) { return !!this.keys[keyCode]; }
+    isPressed(keyCode) { return this.keys.has(keyCode); }
 }
 
 /**
- * オーディオ管理：BGMとSEのライフサイクルを制御
+ * AudioManager: サウンドライフサイクル管理
  */
 class AudioManager {
     constructor() {
         this.currentBgm = null;
-        this.fadeInterval = null; // ★ ここに追加：タイマーを保持する場所
+        this.fadeInterval = null;
         this.sounds = {};
         this.bgms = {};
         
-        // 設定定義（ここを増やすだけで自動ロードされる）
         this.CONFIG = {
             BGM: { 'stage1': 'bgm-stage1.ogg' },
             SE: {
@@ -93,9 +90,23 @@ class AudioManager {
         this.seKeys = Object.keys(this.CONFIG.SE);
     }
 
-    /** BGM と SE をロードして再生準備を行う */
+    async preloadAll() {
+        const loadAud = (a) => new Promise(r => {
+            if (!a || a.readyState >= 3) return r();
+            a.addEventListener('canplaythrough', r, { once: true });
+            a.addEventListener('error', () => r(), { once: true });
+            a.load();
+            setTimeout(r, 3000); // タイムアウト短縮
+        });
+
+        await Promise.all([
+            ...Object.values(this.bgms).map(loadAud),
+            ...Object.values(this.sounds).map(loadAud)
+        ]);
+        console.log("[Audio] Preload complete.");
+    }
+
     initAudio(basePath) {
-        // BGMロード
         this.bgmKeys.forEach(key => {
             const audio = new Audio(basePath + this.CONFIG.BGM[key]);
             audio.crossOrigin = "anonymous";
@@ -104,7 +115,6 @@ class AudioManager {
             this.bgms[key] = audio;
         });
 
-        // SEロード
         this.seKeys.forEach(key => {
             const conf = this.CONFIG.SE[key];
             const audio = new Audio(basePath + conf.file);
@@ -114,56 +124,37 @@ class AudioManager {
         });
     }
 
-    /** BGM再生 */
     playBGM(key) {
-        this.stopAllBGM();
+        this.resetBGM(); // 既存のBGMとフェードをクリア
         this.currentBgm = this.bgms[key];
         if (this.currentBgm) {
             this.currentBgm.currentTime = 0;
-            this.currentBgm.volume = 0.7; // フェード後などを考慮してリセット
-            this.currentBgm.play().catch(() => {});
+            this.currentBgm.volume = 0.7;
+            this.currentBgm.play().catch(e => console.warn("Autoplay blocked"));
         }
     }
 
-    /** すべての BGM を停止して再生位置を先頭に戻す */
-    stopAllBGM() {
-        Object.values(this.bgms).forEach(b => {
-            b.pause();
-            b.currentTime = 0;
-        });
-    }
-
-    /** 再生中の BGM を停止して状態をリセットする */
     resetBGM() {
-        // ★ 追加：動いているフェード処理を強制停止！
         if (this.fadeInterval) {
             clearInterval(this.fadeInterval);
             this.fadeInterval = null;
         }
-
-        // 全てのBGMの音量をリセット
         Object.values(this.bgms).forEach(b => {
             b.pause();
             b.currentTime = 0;
-            b.volume = 0.7; // ★ 初期音量に戻す
+            b.volume = 0.7;
         });
         this.currentBgm = null;
     }
 
-    /** 再生中の BGM を徐々にフェードアウトする */
     fadeOutBGM(duration = 2000) {
-        if (!this.currentBgm) return;
-
-        // ★ もし既にフェード中なら、古いタイマーを消しておく（二重実行防止）
-        if (this.fadeInterval) clearInterval(this.fadeInterval);
+        if (!this.currentBgm || this.fadeInterval) return;
 
         const target = this.currentBgm;
-        const startVol = target.volume;
         const intervalTime = 50;
         const steps = duration / intervalTime;
-        const volStep = startVol / steps;
+        const volStep = target.volume / steps;
 
-        // ★ ローカルの timer ではなく this.fadeInterval に入れる
         this.fadeInterval = setInterval(() => {
             if (target.volume > volStep) {
                 target.volume -= volStep;
@@ -171,12 +162,11 @@ class AudioManager {
                 target.volume = 0;
                 target.pause();
                 clearInterval(this.fadeInterval);
-                this.fadeInterval = null; // 終わったら空にする
+                this.fadeInterval = null;
             }
         }, intervalTime);
     }
 
-    /** 指定の効果音を再生する */
     _playSE(key) {
         const s = this.sounds[key];
         if (s) {
@@ -185,31 +175,30 @@ class AudioManager {
         }
     }
 
-    // ショートカットメソッド
+    // SE Shortcut Methods
     playShot() { this._playSE('shot'); }
     playChangeWp() { this._playSE('changeWp'); }
     playExplosion() { this._playSE('explosion'); }
     playHitSound() { this._playSE('hitHurt'); }
     playPowerUp() { this._playSE('powerUp'); }
 
-    // サウンドテスト用
-    playBGMByIndex(idx) { this.playBGM(this.bgmKeys[idx]); }
-    playSEByIndex(idx) { this._playSE(this.seKeys[idx]); }
-
+    // Sound Test Helpers
     get bgmCount() { return this.bgmKeys.length; }
     get seCount() { return this.seKeys.length; }
     getBGMName(idx) { return this.bgmKeys[idx]?.toUpperCase() || "NONE"; }
     getSEName(idx) { return this.seKeys[idx]?.toUpperCase() || "NONE"; }
+    playBGMByIndex(idx) { this.playBGM(this.bgmKeys[idx]); }
+    playSEByIndex(idx) { this._playSE(this.seKeys[idx]); }
 }
 
 /**
- * 背景：多重スクロールする星屑
+ * Starfield: 背景演出
+ * 
  */
 class Starfield {
     constructor(width, height) {
         this.width = width;
         this.height = height;
-        // Layer1: 遠くの星（遅い・小さい）、Layer2: 近くの星（速い・大きい）
         this.layers = [
             { count: 40, size: 1, speed: 1.0, color: '#888', stars: [] },
             { count: 20, size: 2, speed: 3.0, color: '#FFF', stars: [] }
@@ -238,11 +227,11 @@ class Starfield {
     draw(ctx) {
         this.layers.forEach(layer => {
             ctx.fillStyle = layer.color;
-            ctx.beginPath(); // パスを開始して
+            ctx.beginPath();
             layer.stars.forEach(s => {
-                ctx.rect(s.x, s.y, layer.size, layer.size); // 短形をパスに追加
+                ctx.rect(s.x, s.y, layer.size, layer.size);
             });
-            ctx.fill(); // 最後に一括で塗りつぶす
+            ctx.fill();
         });
     }
 }
