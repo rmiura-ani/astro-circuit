@@ -3,6 +3,7 @@
 *.wav
 *.ogg
 *.jfif
+*.wepb
 scenario.json
 
 # Windows特有のメタデータファイルを無視

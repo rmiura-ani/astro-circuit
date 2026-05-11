@@ -79,13 +79,13 @@ class AudioManager {
         
         // 設定定義（ここを増やすだけで自動ロードされる）
         this.CONFIG = {
-            BGM: { 'stage1': 'bgm-stage1.mp3' },
+            BGM: { 'stage1': 'bgm-stage1.ogg' },
             SE: {
-                shot:      { file: 'shot.wav',      vol: 0.3 },
-                changeWp:  { file: 'changeWp.wav',  vol: 0.8 },
-                explosion: { file: 'explosion.wav', vol: 0.3 },
-                hitHurt:   { file: 'hitHurt.wav',   vol: 0.5 },
-                powerUp:   { file: 'powerUp.wav',   vol: 0.7 },                
+                shot:      { file: 'shot.ogg',      vol: 0.3 },
+                changeWp:  { file: 'changeWp.ogg',  vol: 0.8 },
+                explosion: { file: 'explosion.ogg', vol: 0.3 },
+                hitHurt:   { file: 'hitHurt.ogg',   vol: 0.5 },
+                powerUp:   { file: 'powerUp.ogg',   vol: 0.7 },                
             }
         };
 

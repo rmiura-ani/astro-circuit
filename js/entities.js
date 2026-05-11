@@ -96,13 +96,15 @@ class Enemy extends Entity {
         this.shootTimer = Math.random() * 60;
         this.baseShootInterval = 120; 
         this.fireRateMultiplier = 1.0;
-
+        
         this.image = new Image();
         this.image.crossOrigin = "anonymous";
-        this.image.src = assetBase + "enemy.jfif";
+
+        this.image.src = assetBase + this.imageName || "enemy_straight.webp";
         this.isLoaded = false;
         this.image.onload = () => this.isLoaded = true;
     }
+    get imageName() { return "enemy_straight.webp"; }
 
     /** 敵の移動と攻撃を管理する */
     update(game) {
@@ -177,7 +179,18 @@ class Enemy extends Entity {
 /**
  * 各種派生敵クラス
  */
+class StraightEnemy extends Enemy {
+    get imageName() { return "enemy_straight.webp"; }
+    
+    constructor(assetBase, x, y, bulletType) {
+        super(assetBase, x, y, bulletType, 1); // HP=1
+        this.speed = 2.5; // 少し速めにするなど個性を出せる
+    }
+}
+
 class SineEnemy extends Enemy {
+    get imageName() { return "enemy_sine.webp"; }
+
     constructor(assetBase, x, y, bulletType, phase = 0) {
         super(assetBase, x, y, bulletType);
         this.baseX = x;
@@ -194,6 +207,8 @@ class SineEnemy extends Enemy {
 }
 
 class StationaryEnemy extends Enemy {
+    get imageName() { return "enemy_stationary.webp"; }
+
     constructor(assetBase, x, y, bulletType, hp = 1, stopY = 100, waitTime = 120) {
         super(assetBase, x, y, bulletType, hp);
         this.baseX = x;
@@ -243,7 +258,7 @@ class Player extends Entity {
 
         this.image = new Image();
         this.image.crossOrigin = "anonymous";
-        this.image.src = assetBase + "player.jfif";
+        this.image.src = assetBase + "player.webp";
         this.isLoaded = false;
         this.image.onload = () => this.isLoaded = true;
     }
