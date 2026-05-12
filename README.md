@@ -11,7 +11,6 @@
 Suno AIが生成したノスタルジックな楽曲からインスピレーションを受け、その世界観を表現するために Google Gemini との共創（Co-authored）によって開発されました。極限まで削ぎ落とされた操作性と、MISSIONコードによって刻まれる戦績が特徴です。
 
 - **URL:** [https://void-circuit.ani-net.com](https://void-circuit.ani-net.com)
-- **Version:** 0.29
 
 ---
 

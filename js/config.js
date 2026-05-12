@@ -20,14 +20,14 @@ class ConfigManager {
         // --- 設定値（初期値） ---
         this.difficulty = 'NORMAL';
         this.lives = 3;
-        this.extend = 500000;
+        this.extend = 5000000;
         this.isInvincibleCheat = false;
         
         // --- 選択肢の定義 ---
         this.OPTIONS = {
             difficulty: ['EASY', 'NORMAL', 'HARD', 'VERY HARD'],
             lives: [1, 2, 3, 5],
-            extend: [300000, 500000, 1000000, 'NONE']
+            extend: [3000000, 5000000, 10000000, 'NONE']
         };
 
         this.soundTestIndex = 0;
@@ -269,7 +269,7 @@ class ConfigManager {
             const data = JSON.parse(saved);
             this.difficulty = data.difficulty || 'NORMAL';
             this.lives = data.lives || 3;
-            this.extend = data.extend || 500000;
+            this.extend = data.extend || 5000000;
             this.refreshAllDisplay();
         }
     }

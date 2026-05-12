@@ -42,6 +42,7 @@ class Game {
         this.assets = controller.assets;
         this.entities = [];
         this.particles = [];
+        this.scoreTexts = [];
         this.player = null;
 
         // イベントリスナーの保持（破棄用）
@@ -110,7 +111,6 @@ class Game {
         this.updateWeaponUI();
     }
 
-    // --- 重要ロジック：入力・判定・更新 (v0.36から完全移植) ---
     handleKeyDown(e) {
         if (!this.isRunning) return;
         if (e.code === 'KeyX') this.toggleWeapon();
@@ -124,7 +124,6 @@ class Game {
     }
 
     handleEmergencyEscape() {
-        // 前回のタイマーが動いていたらキャンセルする（重要！）
         if (this.escTimer) {
             clearTimeout(this.escTimer);
         }
@@ -176,6 +175,7 @@ class Game {
         this.updateDebugInfo();
         this.updateInputMode();
         this.updateEntities();
+        this.updateScoreTexts();
     }
 
     updateInputMode() {
@@ -248,7 +248,7 @@ class Game {
         const currentEnemies = this.entities.filter(e => e instanceof Enemy && e.active);
         const currentBullets = this.entities.filter(b => b instanceof Bullet && b.active);
 
-currentEnemies.forEach(enemy => {
+        currentEnemies.forEach(enemy => {
             if (enemy.y + enemy.height < 30) return;
             currentBullets.forEach(bullet => {
                 if (!bullet.active || !enemy.active) return;
@@ -258,8 +258,10 @@ currentEnemies.forEach(enemy => {
                     
                     if (enemy.takeDamage(1)) {
                         // --- 敵が撃沈した時の処理 ---
-                        this.score += 50 * enemy.maxHp * (enemy.maxHp + 1);
+                        const amount = 50 * enemy.maxHp * (enemy.maxHp + 1);
+                        this.score += amount
                         this.stats.enemiesKilled++;
+                        this.scoreTexts.push(new ScoreText(enemy.x, enemy.y, amount, amount >= 5000 ? "#ff0" : "#fff"));
 
                         // ★ ここを追加：個別死亡演出（ボスなどの連鎖爆発）があるか確認
                         if (typeof enemy.onDie === 'function') {
@@ -323,6 +325,7 @@ currentEnemies.forEach(enemy => {
         if (hp >= 50) setTimeout(() => this.sc.audio.playExplosion(), 400);
     }
 
+
     onPlayerMiss() {
         if (!this.player.alive) return;
         this.player.alive = false;
@@ -347,6 +350,9 @@ currentEnemies.forEach(enemy => {
         this.stars.draw(this.ctx);
 
         if (!this.player) return;
+
+        // 1. スコアテキスト
+        this.scoreTexts.forEach(st => st.draw(this.ctx));
 
         // 2. 弾やエフェクト（一番下）
         this.entities.forEach(e => {
@@ -401,6 +407,13 @@ currentEnemies.forEach(enemy => {
         this.sc.startIdleTimer();
     }
 
+    updateScoreTexts() {
+        this.scoreTexts.forEach((st, index) => {
+            st.update();
+            if (st.isDead) this.scoreTexts.splice(index, 1);
+        });
+    }
+    
     updateScoreUI() {
         const scoreEl = document.getElementById('score-display');
         if (scoreEl) {
@@ -419,20 +432,6 @@ currentEnemies.forEach(enemy => {
         }
     }
 
-    updateDebugInfo() {
-        const debugEl = document.getElementById('debug-info');
-        if (this.isInvincibleCheat) {
-            if (this.sessionRecord) this.sessionRecord.cheatUsed = true;
-            debugEl.style.display = 'block';
-            document.getElementById('debug-frame').innerText = this.frame;
-            document.getElementById('debug-index').innerText = `${this.enemyManager.currentIndex} / ${this.enemyManager.scenario.length}`;
-            const loadEl = document.getElementById('debug-load');
-            if (loadEl) loadEl.innerText = this.entities.length + this.particles.length;
-        } else {
-            debugEl.style.display = 'none';
-        }
-    }
-
     updateLivesUI() {
         const el = document.getElementById('lives-display');
         if (!el) return;
@@ -445,6 +444,20 @@ currentEnemies.forEach(enemy => {
         const el = document.getElementById('lives-display');
         el?.classList.add('extend-blink');
         setTimeout(() => el?.classList.remove('extend-blink'), 2000);
+    }
+
+    updateDebugInfo() {
+        const debugEl = document.getElementById('debug-info');
+        if (this.isInvincibleCheat) {
+            if (this.sessionRecord) this.sessionRecord.cheatUsed = true;
+            debugEl.style.display = 'block';
+            document.getElementById('debug-frame').innerText = this.frame;
+            document.getElementById('debug-index').innerText = `${this.enemyManager.currentIndex} / ${this.enemyManager.scenario.length}`;
+            const loadEl = document.getElementById('debug-load');
+            if (loadEl) loadEl.innerText = this.entities.length + this.particles.length;
+        } else {
+            debugEl.style.display = 'none';
+        }
     }
 }
 

@@ -9,7 +9,7 @@
  */
 class SystemController {
     constructor() {
-        this.VERSION = "0.37";
+        this.VERSION = "0.38";
         this.canvas = document.getElementById('game-canvas');
         
         // サブシステムの初期化
@@ -149,11 +149,19 @@ class SystemController {
     showStartScreen(msg, isNew) {
         const missionCode = this.getMissionCode(false);
         const accuracy = this.game.stats.shotsFired > 0 ? Math.floor((this.game.stats.shotsHit / this.game.stats.shotsFired) * 100) : 0;
+        const killRate = this.game.stats.enemiesSpawned > 0 ? Math.floor((this.game.stats.enemiesKilled / this.game.stats.enemiesSpawned) * 100) 
+            : 0;
         const statsHtml = `
             <div class="mission-header">MISSION: ${missionCode}</div>
             <div class="stats-container">
-                <div class="stats-row"><span class="stats-label">KILLS:</span><span class="stats-value">${this.game.stats.enemiesKilled} / ${this.game.stats.enemiesSpawned}</span></div>
-                <div class="stats-row"><span class="stats-label">HIT RATE:</span><span class="stats-value">${accuracy}%</span></div>
+                <div class="stats-row">
+                    <span class="stats-label">KILLS:</span>
+                    <span class="stats-value">${this.game.stats.enemiesKilled} / ${this.game.stats.enemiesSpawned} (${killRate}%)</span>
+                </div>
+                <div class="stats-row">
+                    <span class="stats-label">HIT RATE:</span>
+                    <span class="stats-value">${accuracy}%</span>
+                </div>
             </div>
         `;
         const pEl = document.querySelector('#start-screen p');

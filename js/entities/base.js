@@ -254,3 +254,35 @@ class Particle extends Entity {
         ctx.restore();
     }
 }
+
+/**
+ * スコアテキスト
+ */
+class ScoreText {
+    constructor(x, y, score, color = "#fff") {
+        this.x = x;
+        this.y = y;
+        this.score = score;
+        this.color = color;
+        this.opacity = 1.0;
+        this.life = 60; // 表示フレーム数（約1秒）
+        this.isDead = false;
+    }
+
+    update() {
+        this.y -= 0.5;    // ゆっくり上昇
+        this.life--;
+        this.opacity = this.life / 60; // 徐々に透明に
+        if (this.life <= 0) this.isDead = true;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = this.opacity;
+        ctx.fillStyle = this.color;
+        ctx.font = "8px 'Press Start 2P'"; // レトロなフォント
+        ctx.textAlign = "center";
+        ctx.fillText(this.score, this.x, this.y);
+        ctx.restore();
+    }
+}
