@@ -8,17 +8,14 @@
  * Note: Included assets are the property of their respective owners.
  */
 class Player extends Entity {
-constructor(game, x, y) {
+    constructor(game, x, y) {
         super(x, y, 32, 32);
         this.speed = 5;
         this.alive = true;
         this.invincibleTimer = 0;
 
-        // ★ 修正ポイント：AssetManagerから画像を取得
-        const fileName = "player.webp"; // または "player.webp"
+        const fileName = "player.webp";
         this.image = game.assets.get(fileName);
-        
-        // すでに preloadAssets で読み込み済みなので、即座に true にできる
         this.isLoaded = !!this.image;
     }
 

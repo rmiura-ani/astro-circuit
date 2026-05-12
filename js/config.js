@@ -11,8 +11,8 @@
  * 設定画面（BIOS風）を管理するクラス
  */
 class ConfigManager {
-    constructor(game) {
-        this.game = game;
+    constructor(sc) {
+        this.sc = sc;
         this.isMode = false;
         this.currentIndex = 0;
         this.debugCCount = 0;
@@ -21,6 +21,7 @@ class ConfigManager {
         this.difficulty = 'NORMAL';
         this.lives = 3;
         this.extend = 500000;
+        this.isInvincibleCheat = false;
         
         // --- 選択肢の定義 ---
         this.OPTIONS = {
@@ -55,7 +56,7 @@ class ConfigManager {
         this.refreshAllDisplay();
         this.updateSelection();
 
-        if (this.game.audio) this.game.audio.resetBGM();
+        if (this.sc.audio) this.sc.audio.resetBGM();
     }
 
     /** 設定画面を閉じる */
@@ -63,7 +64,7 @@ class ConfigManager {
         this.isMode = false;
         this.screenEl.style.display = 'none';
         this.startScreenEl.style.display = 'flex';
-        if (this.game.audio) this.game.audio.resetBGM();
+        if (this.sc.audio) this.sc.audio.resetBGM();
     }
 
     /** キー入力処理 */
@@ -105,10 +106,10 @@ class ConfigManager {
             idx = isRight ? (idx + 1) % options.length : (idx - 1 + options.length) % options.length;
             this[setting] = options[idx];
         } else if (setting === 'sound') {
-            const len = this.game.audio.seCount;
+            const len = this.sc.audio.seCount;
             this.soundTestIndex = isRight ? (this.soundTestIndex + 1) % len : (this.soundTestIndex - 1 + len) % len;
         } else if (setting === 'bgm') {
-            const len = this.game.audio.bgmCount;
+            const len = this.sc.audio.bgmCount;
             this.bgmTestIndex = isRight ? (this.bgmTestIndex + 1) % len : (this.bgmTestIndex - 1 + len) % len;
         }
 
@@ -126,7 +127,7 @@ class ConfigManager {
         if (setting === 'reset_score') {
             if (!this.resetConfirmed) {
                 this.resetConfirmed = true;
-                if (this.game.audio) this.game.audio.playHitSound();
+                if (this.sc.audio) this.sc.audio.playHitSound();
                 item.classList.add('danger');
                 const valEl = item.querySelector('.value');
                 if (valEl) valEl.innerText = "SURE?";
@@ -157,12 +158,9 @@ class ConfigManager {
     }
 
     executeHighScoreReset() {
-        if (this.game.audio) this.game.audio.playExplosion();
-        if (this.game.visualEffectWarning) this.game.visualEffectWarning();
-
-        localStorage.removeItem('void_circuit_highscore');
-        this.game.highScore = 0;
-        if (this.game.updateScoreUI) this.game.updateScoreUI();
+        if (this.sc.audio) this.sc.audio.playExplosion();
+        if (this.sc.visualEffectWarning) this.sc.visualEffectWarning();
+        this.sc.resetHighScore();
 
         const valEl = this.items[this.currentIndex].querySelector('.value');
         if (valEl) {
@@ -180,16 +178,14 @@ class ConfigManager {
         if (this.debugCCount < 7) return;
         this.debugCCount = 0;
 
-        this.game.isInvincibleCheat = !this.game.isInvincibleCheat;
-        if (this.game.updateDebugInfo) this.game.updateDebugInfo();
+        this.isInvincibleCheat = !this.isInvincibleCheat;
 
-        if (this.game.isInvincibleCheat) {
-            this.game.cheatUsedInSession = true;
-            if (this.game.audio) this.game.audio.playPowerUp();
+        if (this.isInvincibleCheat) {
+            if (this.sc.audio) this.sc.audio.playPowerUp();
             this.screenEl.style.color = "#FFD700";
             this.screenEl.style.textShadow = "0 0 10px #FFF";
         } else {
-            if (this.game.audio) this.game.audio.playExplosion();
+            if (this.sc.audio) this.sc.audio.playExplosion();
             this.screenEl.style.color = "";
             this.screenEl.style.textShadow = "";
         }
@@ -207,9 +203,9 @@ class ConfigManager {
         if (this.OPTIONS[setting]) {
             valEl.innerText = this[setting];
         } else if (setting === 'sound') {
-            valEl.innerText = `< ${this.game.audio.getSEName(this.soundTestIndex)} >`;
+            valEl.innerText = `< ${this.sc.audio.getSEName(this.soundTestIndex)} >`;
         } else if (setting === 'bgm') {
-            valEl.innerText = `< ${this.game.audio.getBGMName(this.bgmTestIndex)} >`;
+            valEl.innerText = `< ${this.sc.audio.getBGMName(this.bgmTestIndex)} >`;
         }
     }
 
@@ -218,6 +214,7 @@ class ConfigManager {
             item.classList.toggle('active', index === this.currentIndex);
         });
         if (this.resetConfirmed) this.cancelResetConfirm();
+        this.debugCCount = 0;
     }
 
     setupMouseEvents() {
@@ -235,7 +232,11 @@ class ConfigManager {
                 const setting = item.dataset.setting;
                 if (this.OPTIONS[setting] || setting === 'sound' || setting === 'bgm') {
                     this.handleValueChange(true);
-                    if (this.game.audio) this.game.audio.playHitSound();
+                    if (setting === 'sound') this.playBackSoundTest();
+                    if (setting === 'bgm') this.playBackBGMTest();
+                    if (this.sc.audio && setting !== 'bgm' && setting !== 'sound') {
+                        if (this.sc.audio) this.sc.audio.playHitSound();
+                    }
                 } else {
                     this.handleAction();
                 }
@@ -250,8 +251,8 @@ class ConfigManager {
         });
     }
 
-    playBackSoundTest() { this.game.audio.playSEByIndex(this.soundTestIndex); }
-    playBackBGMTest() { this.game.audio.playBGMByIndex(this.bgmTestIndex); }
+    playBackSoundTest() { this.sc.audio.playSEByIndex(this.soundTestIndex); }
+    playBackBGMTest() { this.sc.audio.playBGMByIndex(this.bgmTestIndex); }
 
     saveConfig() {
         const configData = {
