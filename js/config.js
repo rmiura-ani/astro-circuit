@@ -2,7 +2,8 @@
  * PROJECT: VOID-CIRCUIT
  *
  * config.js
- * * Copyright (c) 2026 あに。部長 / Ryo Miura
+ * 
+ * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
@@ -17,12 +18,6 @@ class ConfigManager {
         this.currentIndex = 0;
         this.debugCCount = 0;
 
-        // --- 設定値（初期値） ---
-        this.difficulty = 'NORMAL';
-        this.lives = 3;
-        this.extend = 5000000;
-        this.isInvincibleCheat = false;
-        
         // --- 選択肢の定義 ---
         this.OPTIONS = {
             difficulty: ['EASY', 'NORMAL', 'HARD', 'VERY HARD'],
@@ -30,8 +25,13 @@ class ConfigManager {
             extend: [3000000, 5000000, 10000000, 'NONE']
         };
 
+        // --- 設定値（OPTIONSから取得） ---
+        this.difficulty = this.OPTIONS.difficulty[1]; // 'NORMAL'
+        this.lives      = this.OPTIONS.lives[2];      // 3
+        this.extend     = this.OPTIONS.extend[1];     // 5000000        
         this.soundTestIndex = 0;
         this.bgmTestIndex = 0;
+        this.isInvincibleCheat = false;
 
         // --- DOM要素 ---
         this.screenEl = document.getElementById('config-screen');
@@ -146,6 +146,7 @@ class ConfigManager {
         }
     }
 
+    /** 「リセットしていい？」*/
     cancelResetConfirm() {
         this.resetConfirmed = false;
         this.items.forEach(item => {
@@ -157,6 +158,7 @@ class ConfigManager {
         });
     }
 
+    /** ハイスコアリセット */
     executeHighScoreReset() {
         if (this.sc.audio) this.sc.audio.playExplosion();
         if (this.sc.visualEffectWarning) this.sc.visualEffectWarning();
@@ -173,6 +175,7 @@ class ConfigManager {
         }
     }
 
+    /** 無敵設定 */
     handleCheatCommand() {
         this.debugCCount++;
         if (this.debugCCount < 7) return;
@@ -191,10 +194,12 @@ class ConfigManager {
         }
     }
 
+    /** 描画（全部） */
     refreshAllDisplay() {
         this.items.forEach(item => this.refreshDisplay(item));
     }
 
+    /** 描画（アイテム） */
     refreshDisplay(item) {
         const setting = item.dataset.setting;
         const valEl = item.querySelector('.value');
@@ -209,6 +214,7 @@ class ConfigManager {
         }
     }
 
+    /** 選択 */
     updateSelection() {
         this.items.forEach((item, index) => {
             item.classList.toggle('active', index === this.currentIndex);
@@ -217,6 +223,7 @@ class ConfigManager {
         this.debugCCount = 0;
     }
 
+    /** マウスイベントハンドラ セットアップ */
     setupMouseEvents() {
         this.items.forEach((item, index) => {
             // 前回のイベントをクリアして二重登録を防ぐ
@@ -251,9 +258,11 @@ class ConfigManager {
         });
     }
 
+    /** 音源テスト系 */
     playBackSoundTest() { this.sc.audio.playSEByIndex(this.soundTestIndex); }
     playBackBGMTest() { this.sc.audio.playBGMByIndex(this.bgmTestIndex); }
 
+    /** 設定セーブ */
     saveConfig() {
         const configData = {
             difficulty: this.difficulty,
@@ -263,14 +272,26 @@ class ConfigManager {
         localStorage.setItem('void_circuit_config', JSON.stringify(configData));
     }
 
+    /** 設定ロード */
     loadConfig() {
         const saved = localStorage.getItem('void_circuit_config');
-        if (saved) {
+        if (!saved) return;
+
+        try {
             const data = JSON.parse(saved);
-            this.difficulty = data.difficulty || 'NORMAL';
-            this.lives = data.lives || 3;
-            this.extend = data.extend || 5000000;
+            this.difficulty = this.OPTIONS.difficulty.includes(data.difficulty)
+                ? data.difficulty
+                : this.OPTIONS.difficulty[1];
+            this.lives = this.OPTIONS.lives.includes(data.lives)
+                ? data.lives
+                : this.OPTIONS.lives[2];
+            this.extend = this.OPTIONS.extend.includes(data.extend)
+                ? data.extend
+                : this.OPTIONS.extend[1];
             this.refreshAllDisplay();
+
+        } catch (e) {
+            console.error("Config corruption detected. Resetting to defaults.", e);
         }
     }
 }

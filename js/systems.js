@@ -1,8 +1,11 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * systems.js - Stage & Asset Management
+ * systems.js
+ * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
+ * Licensed under the MIT License (see LICENSE file)
+ * Note: Included assets are the property of their respective owners.
  */
 
 /**
@@ -69,7 +72,9 @@ class InputManager {
  * AudioManager: サウンドライフサイクル管理
  */
 class AudioManager {
-    constructor() {
+    constructor(basePath) {
+        this.basePath = basePath;
+
         this.currentBgm = null;
         this.fadeInterval = null;
         this.sounds = {};
@@ -106,9 +111,9 @@ class AudioManager {
         console.log("[Audio] Preload complete.");
     }
 
-    initAudio(basePath) {
+    initAudio() {
         this.bgmKeys.forEach(key => {
-            const audio = new Audio(basePath + this.CONFIG.BGM[key]);
+            const audio = new Audio(this.basePath + this.CONFIG.BGM[key]);
             audio.crossOrigin = "anonymous";
             audio.loop = true;
             audio.volume = 0.7;
@@ -117,7 +122,7 @@ class AudioManager {
 
         this.seKeys.forEach(key => {
             const conf = this.CONFIG.SE[key];
-            const audio = new Audio(basePath + conf.file);
+            const audio = new Audio(this.basePath + conf.file);
             audio.crossOrigin = "anonymous";
             audio.volume = conf.vol;
             this.sounds[key] = audio;
@@ -189,49 +194,4 @@ class AudioManager {
     getSEName(idx) { return this.seKeys[idx]?.toUpperCase() || "NONE"; }
     playBGMByIndex(idx) { this.playBGM(this.bgmKeys[idx]); }
     playSEByIndex(idx) { this._playSE(this.seKeys[idx]); }
-}
-
-/**
- * Starfield: 背景演出
- * 
- */
-class Starfield {
-    constructor(width, height) {
-        this.width = width;
-        this.height = height;
-        this.layers = [
-            { count: 40, size: 1, speed: 1.0, color: '#888', stars: [] },
-            { count: 20, size: 2, speed: 3.0, color: '#FFF', stars: [] }
-        ];
-        
-        this.layers.forEach(layer => {
-            for (let i = 0; i < layer.count; i++) {
-                layer.stars.push({
-                    x: Math.random() * width,
-                    y: Math.random() * height,
-                    s: layer.speed + (Math.random() * 0.5)
-                });
-            }
-        });
-    }
-
-    update() {
-        this.layers.forEach(layer => {
-            layer.stars.forEach(s => {
-                s.y += s.s;
-                if (s.y > this.height) s.y = -layer.size;
-            });
-        });
-    }
-
-    draw(ctx) {
-        this.layers.forEach(layer => {
-            ctx.fillStyle = layer.color;
-            ctx.beginPath();
-            layer.stars.forEach(s => {
-                ctx.rect(s.x, s.y, layer.size, layer.size);
-            });
-            ctx.fill();
-        });
-    }
 }

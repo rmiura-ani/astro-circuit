@@ -9,17 +9,18 @@
  */
 
 class AssetManager {
-    constructor() {
+    constructor(basePath) {
+        this.basePath = basePath;
         this.imageCache = {};
     }
 
-    async loadImages(assetBase) {
+    async loadImages() {
         const imagesToLoad = {
-            'player.webp': assetBase + 'player.webp',
-            'enemy_straight.webp': assetBase + 'enemy_straight.webp',
-            'enemy_sine.webp': assetBase + 'enemy_sine.webp',
-            'enemy_stationary.webp': assetBase + 'enemy_stationary.webp',
-            'enemy_boss_01.webp': assetBase + 'enemy_boss_01.webp'
+            'player.webp': this.basePath + 'player.webp',
+            'enemy_straight.webp': this.basePath + 'enemy_straight.webp',
+            'enemy_sine.webp': this.basePath + 'enemy_sine.webp',
+            'enemy_stationary.webp': this.basePath + 'enemy_stationary.webp',
+            'enemy_boss_01.webp': this.basePath + 'enemy_boss_01.webp'
         };
 
         const loadImg = (key, url) => new Promise(r => {

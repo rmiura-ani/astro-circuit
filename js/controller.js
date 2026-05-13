@@ -7,15 +7,25 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+
+/**
+ * システムコントローラー
+ */
 class SystemController {
     constructor() {
-        this.VERSION = "0.38";
+        this.VERSION = "0.39";
         this.canvas = document.getElementById('game-canvas');
-        
+
+        // ブランチ名 or タグ名　をもとに assetBase を決定
+        const urlParams = new URLSearchParams(window.location.search);
+        const tag = urlParams.get('tag');
+        const refPath = tag ? `tags/${tag}` : `heads/${urlParams.get('branch') || 'main'}`;
+        this.assetBase = `https://raw.githubusercontent.com/rmiura-ani/void-circuit-assets/refs/${refPath}/`;
+
         // サブシステムの初期化
         this.input = new InputManager(this.canvas);
-        this.audio = new AudioManager();
-        this.assets = new AssetManager();
+        this.audio = new AudioManager(this.assetBase);
+        this.assets = new AssetManager(this.assetBase);
         this.config = new ConfigManager(this);
         this.config.loadConfig();
         this.enemyManager = new EnemyManager();
@@ -26,6 +36,7 @@ class SystemController {
         this.idleTimeout = null;
     }
 
+    // --- プロパティ ---
     set highScore(val) {
         const highScore = Math.min(val, 99999990);
         localStorage.setItem('void_circuit_highscore', highScore);
@@ -35,24 +46,21 @@ class SystemController {
     }
     get highScore() { return parseInt(localStorage.getItem('void_circuit_highscore')) || 0; }
 
+    /** ハイスコアリセット */
     resetHighScore() {
         this.highScore = 0;
         localStorage.removeItem('void_circuit_highscore');
     }
 
+    /** 初期化 */
     async init() {
         document.getElementById('version-display').innerText = this.VERSION;
         document.getElementById('config-open-btn').style.display = 'none';
 
         try {
-            // ブランチ名をもとに assetBase を決定
-            const urlParams = new URLSearchParams(window.location.search);
-            const branch = urlParams.get('branch') || 'main';
-            this.assetBase = `https://raw.githubusercontent.com/rmiura-ani/void-circuit-assets/refs/heads/${branch}/`;
-
             // 各種アセット読み込み
-            this.audio.initAudio(this.assetBase);
-            await Promise.all([this.audio.preloadAll(), this.assets.loadImages(this.assetBase)]);
+            this.audio.initAudio();
+            await Promise.all([this.audio.preloadAll(), this.assets.loadImages()]);
             const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
             const scenarioPath = isLocal ? './scenario.json' : assetBase + 'scenario.json';
             const scenarioName = isLocal ? 'LOCAL' : branch.toUpperCase;
@@ -73,6 +81,7 @@ class SystemController {
         }
     }
 
+    /** イベントリスナー セットアップ */
     setupGlobalEvents() {
         document.getElementById('start-screen').addEventListener('click', () => this.handleProceed('MOUSE'));
         document.getElementById('config-open-btn')?.addEventListener('click', (e) => {
@@ -99,6 +108,7 @@ class SystemController {
         };
     }
 
+    /** 実行ハンドラ */
     handleProceed(type) {
         if (this.config.isMode || (this.game && this.game.isRunning)) return;
         if (this.isShowingCredits) return this.backToTitle();
@@ -108,26 +118,19 @@ class SystemController {
         if (this.isLoaded) {
             this.stopIdleTimer();
             if (!this.game) this.game = new Game(this);
-            this.game.start(this.assetBase, type === 'MOUSE' ? 'MOUSE' : 'KEYBOARD');
-        }
-    }
-
-    setStartMessage(text, color) {
-        const el = document.querySelector('#start-screen p');
-        if (el) {
-            el.innerHTML = text;
-            el.style.color = color;
-            el.style.animation = "none";
+            this.game.start(type === 'MOUSE' ? 'MOUSE' : 'KEYBOARD');
         }
     }
 
     // --- 画面遷移系 ---
+    /** タイトル => クレジット表示のタイマー */
     startIdleTimer() {
         this.stopIdleTimer();
         this.idleTimeout = setTimeout(() => this.showCredits(), 10000);
     }
     stopIdleTimer() { if (this.idleTimeout) clearTimeout(this.idleTimeout); }
     
+    /** クレジット表示 */
     showCredits() {
         this.isShowingCredits = true;
         document.getElementById('title-content').style.display = 'none';
@@ -137,6 +140,7 @@ class SystemController {
         screen.classList.add('scrolling');
     }
 
+    /** タイトルに戻る */
     backToTitle() {
         this.isShowingCredits = false;
         document.getElementById('credit-screen').style.display = 'none';
@@ -146,12 +150,13 @@ class SystemController {
         this.startIdleTimer();
     }
 
+    /** スタート表示 */ 
     showStartScreen(msg, isNew) {
         const missionCode = this.getMissionCode(false);
-        const accuracy = this.game.stats.shotsFired > 0 ? Math.floor((this.game.stats.shotsHit / this.game.stats.shotsFired) * 100) : 0;
-        const killRate = this.game.stats.enemiesSpawned > 0 ? Math.floor((this.game.stats.enemiesKilled / this.game.stats.enemiesSpawned) * 100) 
-            : 0;
-        const statsHtml = `
+        const killRate = this.game.stats.enemiesSpawned > 0 ? Math.floor((this.game.stats.enemiesKilled / this.game.stats.enemiesSpawned) * 100) : 0;
+        const accuracy = this.game.stats.shotsFired > 0 ? ((this.game.stats.shotsHit / this.game.stats.shotsFired) * 100).toFixed(3) : "0.000";
+
+            const statsHtml = `
             <div class="mission-header">MISSION: ${missionCode}</div>
             <div class="stats-container">
                 <div class="stats-row">
@@ -167,8 +172,21 @@ class SystemController {
         const pEl = document.querySelector('#start-screen p');
         pEl.innerHTML = `<div class="result-msg">${msg}</div>${statsHtml}${isNew ? '<div class="new-record">★ NEW HI-SCORE !! ★</div>' : ''}<br>RETRY OPERATION?`;
         document.getElementById('start-screen').style.display = 'flex';
+
+        this.setupShareButton();
     }
 
+    /** スタートメッセージ */ 
+    setStartMessage(text, color) {
+        const el = document.querySelector('#start-screen p');
+        if (el) {
+            el.innerHTML = text;
+            el.style.color = color;
+            el.style.animation = "none";
+        }
+    }
+
+    /** X へのシェアボタン表示 */ 
     setupShareButton() {
         const btn = document.getElementById('share-btn');
         btn.style.display = 'block';
@@ -178,6 +196,7 @@ class SystemController {
         };
     }
 
+    /** シェア用もんごん */ 
     generateShareText() {
         return `PROJECT: VOID-CIRCUIT v${this.VERSION}\n` +
                `----------------------------\n` +
@@ -189,6 +208,7 @@ class SystemController {
                `#VoidCircuit #80年代STG #IndieGame`;
     }
 
+    /** ミッション名導出 */ 
     getMissionCode(isShare = false) {
         const r = this.game.sessionRecord;
         const diffMap = { 'EASY':'E', 'NORMAL':'N', 'HARD':'H', 'VERY HARD':'VH' };

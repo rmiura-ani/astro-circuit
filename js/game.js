@@ -31,7 +31,6 @@ class Game {
         this.sessionRecord = null;
 
         this.isRunning = false;
-        this.inputMode = 'NONE';
         this.weaponMode = 'STRAIGHT';
         this.frame = 0;
         this.gameOverTimer = 0;
@@ -50,12 +49,38 @@ class Game {
         this._boundMouseDown = (e) => this.handleMouseDown(e);
     }
 
-    // --- プロパティ ---
+    // --- スコア制御 ---
     set score(val) {
         this._score = Math.min(val, 99999990);
         this.updateScoreUI();
     }
     get score() { return this._score; }
+
+    updateScoreUI() {
+        const scoreEl = document.getElementById('score-display');
+        if (scoreEl) {
+            scoreEl.innerText = `SCORE: ${this.score.toString().padStart(8, '0')}`;
+            if (this.score >= 99999990 && !this.hasCounterStopped) {
+                scoreEl.classList.add('counter-stop');
+                this.sc.audio.playPowerUp();
+                this.hasCounterStopped = true;
+            }
+        }
+        if (!this.hasExtended && this.extendThreshold !== 'NONE' && this.score >= this.extendThreshold) {
+            this.currentLives++;
+            this.sc.audio.playPowerUp();
+            this.hasExtended = true;
+            this.triggerExtendBlink();
+        }
+    }
+
+    triggerExtendBlink() {
+        const el = document.getElementById('lives-display');
+        el?.classList.add('extend-blink');
+        setTimeout(() => el?.classList.remove('extend-blink'), 2000);
+    }
+
+    // --- ライフ制御 ---
 
     set currentLives(val) {
         this._lives = val;
@@ -63,10 +88,18 @@ class Game {
     }
     get currentLives() { return this._lives; }
 
-    // --- ゲームフロー ---
-    start(assetBase, initialInputMode) {
+    updateLivesUI() {
+        const el = document.getElementById('lives-display');
+        if (!el) return;
+        const count = Math.max(0, this.currentLives - 1);
+        const icon = "🚀";
+        el.innerText = count === 0 ? "" : (count <= 3 ? icon.repeat(count) : `${icon}x${count}`);
+    }
 
-        this.inputMode = initialInputMode;
+    // --- ゲームフロー ---
+    /** ゲーム開始 */
+    start(initialInputMode) {
+
         document.getElementById('start-screen').style.display = 'none';
         document.getElementById('hi-score-display').classList.remove('counter-stop');
         document.getElementById('weapon-container').style.display = 'block';
@@ -82,11 +115,13 @@ class Game {
         this.reset();
         window.addEventListener('keydown', this._boundKeyDown);
         window.addEventListener('mousedown', this._boundMouseDown);
+        this.sessionRecord.inputMode = initialInputMode;
 
         this.isRunning = true;
         this.sc.audio.playBGM('stage1');
     }
 
+    /** 初期化 */
     reset() {
         this.player = new Player(this, this.width / 2 - 16, this.height - 80);
         this.entities = [];
@@ -100,7 +135,7 @@ class Game {
             difficulty: this.sc.config.difficulty,
             extend: this.sc.config.extend,
             lives: this.sc.config.lives,
-            inputMode: this.inputMode,
+            inputMode: "NONE",
             cheatUsed: this.sc.config.isInvincibleCheat
         };        
         this.stats = { enemiesSpawned: 0, enemiesKilled: 0, shotsFired: 0, shotsHit: 0 };
@@ -111,18 +146,21 @@ class Game {
         this.updateWeaponUI();
     }
 
+    /** キー入力 */
     handleKeyDown(e) {
         if (!this.isRunning) return;
         if (e.code === 'KeyX') this.toggleWeapon();
         if (e.key === 'Escape') this.handleEmergencyEscape();
     }
 
+    /** マウス入力 */
     handleMouseDown(e) {
         if (this.isRunning && this.player?.alive && e.target !== this.canvas) {
             this.toggleWeapon();
         }
     }
 
+    /** ESC連打でゲーム終了 */
     handleEmergencyEscape() {
         if (this.escTimer) {
             clearTimeout(this.escTimer);
@@ -150,6 +188,7 @@ class Game {
         }
     }
 
+    /** ESC連打のVF */
     visualEffectWarning() {
         const container = document.getElementById('game-container');
         if (!container) return;
@@ -158,6 +197,7 @@ class Game {
         setTimeout(() => { container.style.filter = ""; }, 150);
     }
 
+    /** 表示更新 */
     update() {
         this.stars.update();
         if (!this.isRunning) return;
@@ -170,22 +210,58 @@ class Game {
             this.handlePlayerShooting();
             this.checkCollisions();
             this.checkClearCondition();
-        }
-        
-        this.updateDebugInfo();
-        this.updateInputMode();
+            this.updateInputMode();
+        }        
         this.updateEntities();
         this.updateScoreTexts();
+        this.updateDebugInfo();
     }
 
+    /** エンティティ更新 */
+    updateEntities() {
+        [...this.entities, ...this.particles].forEach(e => e.update(this));
+        this.entities = this.entities.filter(e => e.active);
+        this.particles = this.particles.filter(e => e.active);
+    }
+
+    /** 敵スコアテキスト更新 */
+    updateScoreTexts() {
+        this.scoreTexts.forEach((st, index) => {
+            st.update();
+            if (st.isDead) this.scoreTexts.splice(index, 1);
+        });
+    }
+
+    /** デバッグ用フレーム・シナリオ表示 */
+    updateDebugInfo() {
+        const debugEl = document.getElementById('debug-info');
+        if (this.isInvincibleCheat) {
+            debugEl.style.display = 'block';
+            document.getElementById('debug-frame').innerText = this.frame;
+            document.getElementById('debug-index').innerText = `${this.enemyManager.currentIndex} / ${this.enemyManager.scenario.length}`;
+            const loadEl = document.getElementById('debug-load');
+            if (loadEl) loadEl.innerText = this.entities.length + this.particles.length;
+        } else {
+            debugEl.style.display = 'none';
+        }
+    }
+
+    /** キーボードかマウスかどちらで遊んでいるかを記録 */
     updateInputMode() {
-        if (this.inputMode === 'BOTH') return;
+        if (this.sessionRecord.inputMode === 'BOTH') return;
         const isKeyActive = (this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isPressed('ArrowUp'));
-        if (this.inputMode === 'KEYBOARD' && this.sc.input.isTouching) this.inputMode = 'BOTH';
-        else if (this.inputMode === 'MOUSE' && isKeyActive) this.inputMode = 'BOTH';
-        if (this.sessionRecord) this.sessionRecord.inputMode = this.inputMode;
+        if (this.sessionRecord.inputMode === 'KEYBOARD' && this.sc.input.isTouching) this.sessionRecord.inputMode = 'BOTH';
+        else if (this.sessionRecord.inputMode === 'MOUSE' && isKeyActive) this.sessionRecord.inputMode = 'BOTH';
     }
 
+    /** 武器選択 */
+    toggleWeapon() {
+        this.weaponMode = (this.weaponMode === 'STRAIGHT') ? 'WIDE' : 'STRAIGHT';
+        this.sc.audio.playChangeWp();
+        this.updateWeaponUI();
+    }
+
+    /** 武器表示更新 */
     updateWeaponUI() {
         const displayEl = document.getElementById('weapon-display');
         const hintEl = document.getElementById('weapon-hint');
@@ -196,12 +272,7 @@ class Game {
         if (hintEl) hintEl.innerText = '[X]Key OR TAP SIDE-UI TO CHANGE';
     }
 
-    toggleWeapon() {
-        this.weaponMode = (this.weaponMode === 'STRAIGHT') ? 'WIDE' : 'STRAIGHT';
-        this.sc.audio.playChangeWp();
-        this.updateWeaponUI();
-    }
-
+    /** ショット */
     handlePlayerShooting() {
         const isFiring = this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isTouching;
         if (isFiring) {
@@ -209,7 +280,7 @@ class Game {
                 if (this.frame % 8 === 0) {
                     this.entities.push(new Bullet(this.player.x + 8, this.player.y, 0));
                     this.entities.push(new Bullet(this.player.x + 20, this.player.y, 0));
-                    this.stats.shotsFired++;
+                    this.stats.shotsFired += 2; // 2発分カウント
                     this.sc.audio.playShot();
                 }
             } else {
@@ -217,7 +288,7 @@ class Game {
                     this.entities.push(new Bullet(this.player.x + 14, this.player.y, 0));
                     this.entities.push(new Bullet(this.player.x + 14, this.player.y, -3.5));
                     this.entities.push(new Bullet(this.player.x + 14, this.player.y, 3.5));
-                    this.stats.shotsFired++;
+                    this.stats.shotsFired += 3; // 3発分カウント
                     this.sc.audio.playShot();
                 }
             }
@@ -225,12 +296,7 @@ class Game {
         if (this.frame % 5 === 0) this.score += isFiring ? 20 : 30;
     }
 
-    updateEntities() {
-        [...this.entities, ...this.particles].forEach(e => e.update(this));
-        this.entities = this.entities.filter(e => e.active);
-        this.particles = this.particles.filter(e => e.active);
-    }
-
+    /** 判定 */
     checkCollisions() {
         if (this.player.alive && !this.player.isInvincible && !this.isInvincibleCheat) {
             const px = this.player.x + 16, py = this.player.y + 16;
@@ -257,13 +323,12 @@ class Game {
                     this.stats.shotsHit++;
                     
                     if (enemy.takeDamage(1)) {
-                        // --- 敵が撃沈した時の処理 ---
                         const amount = 50 * enemy.maxHp * (enemy.maxHp + 1);
                         this.score += amount
                         this.stats.enemiesKilled++;
                         this.scoreTexts.push(new ScoreText(enemy.x, enemy.y, amount, amount >= 5000 ? "#ff0" : "#fff"));
 
-                        // ★ ここを追加：個別死亡演出（ボスなどの連鎖爆発）があるか確認
+                        // 個別演出
                         if (typeof enemy.onDie === 'function') {
                             enemy.onDie(this); // gameインスタンス(this)を渡す
                         }
@@ -302,15 +367,7 @@ class Game {
             Math.abs(r1cy - r2cy) < (h1 + h2) / 2;
     }
 
-    checkClearCondition() {
-        if (this.enemyManager.isFinished && this.entities.filter(e => e instanceof Enemy).length === 0) {
-            if (!this.isCleared) {
-                this.isCleared = true;
-                this.sc.audio.fadeOutBGM(3000);
-            }
-        }
-    }
-
+    /** 爆発エフェクト */
     createExplosion(x, y, enemy) {
         const hp = enemy.maxHp || 1;
         const count = 10 + (hp * 2);
@@ -325,7 +382,17 @@ class Game {
         if (hp >= 50) setTimeout(() => this.sc.audio.playExplosion(), 400);
     }
 
+    /** ステージクリア判定 */
+    checkClearCondition() {
+        if (this.enemyManager.isFinished && this.entities.filter(e => e instanceof Enemy).length === 0) {
+            if (!this.isCleared) {
+                this.isCleared = true;
+                this.sc.audio.fadeOutBGM(3000);
+            }
+        }
+    }
 
+    /** ミス */
     onPlayerMiss() {
         if (!this.player.alive) return;
         this.player.alive = false;
@@ -336,6 +403,7 @@ class Game {
         else this.sc.audio.fadeOutBGM();
     }
 
+    /** リスポーン */
     respawnPlayer() {
         this.player.x = this.width / 2 - 16;
         this.player.y = this.height - 80;
@@ -343,6 +411,7 @@ class Game {
         this.player.setInvincible(180);
     }
 
+    /** 描画 */
     draw() {
         // 1. 背景
         this.ctx.fillStyle = '#000';
@@ -375,6 +444,7 @@ class Game {
         this.drawOverlayMessages();
     }
 
+    /** Overlayメッセージ(GAME OVER等） */
     drawOverlayMessages() {
         this.ctx.font = '16px "Press Start 2P", cursive';
         this.ctx.textAlign = 'center';
@@ -394,6 +464,7 @@ class Game {
         }
     }
 
+    /** ゲーム終了 */
     endSession(msg) {
         if (!this.isRunning && this.gameOverTimer > 182) return;
         this.isRunning = false;
@@ -403,61 +474,7 @@ class Game {
         }
         document.getElementById('weapon-container').style.display = 'none';
         this.sc.showStartScreen(msg, isNew);
-        this.sc.setupShareButton();
         this.sc.startIdleTimer();
-    }
-
-    updateScoreTexts() {
-        this.scoreTexts.forEach((st, index) => {
-            st.update();
-            if (st.isDead) this.scoreTexts.splice(index, 1);
-        });
-    }
-    
-    updateScoreUI() {
-        const scoreEl = document.getElementById('score-display');
-        if (scoreEl) {
-            scoreEl.innerText = `SCORE: ${this.score.toString().padStart(8, '0')}`;
-            if (this.score >= 99999990 && !this.hasCounterStopped) {
-                scoreEl.classList.add('counter-stop');
-                this.sc.audio.playPowerUp();
-                this.hasCounterStopped = true;
-            }
-        }
-        if (!this.hasExtended && this.extendThreshold !== 'NONE' && this.score >= this.extendThreshold) {
-            this.currentLives++;
-            this.sc.audio.playPowerUp();
-            this.hasExtended = true;
-            this.triggerExtendBlink();
-        }
-    }
-
-    updateLivesUI() {
-        const el = document.getElementById('lives-display');
-        if (!el) return;
-        const count = Math.max(0, this.currentLives - 1);
-        const icon = "🚀";
-        el.innerText = count === 0 ? "" : (count <= 3 ? icon.repeat(count) : `${icon}x${count}`);
-    }
-
-    triggerExtendBlink() {
-        const el = document.getElementById('lives-display');
-        el?.classList.add('extend-blink');
-        setTimeout(() => el?.classList.remove('extend-blink'), 2000);
-    }
-
-    updateDebugInfo() {
-        const debugEl = document.getElementById('debug-info');
-        if (this.isInvincibleCheat) {
-            if (this.sessionRecord) this.sessionRecord.cheatUsed = true;
-            debugEl.style.display = 'block';
-            document.getElementById('debug-frame').innerText = this.frame;
-            document.getElementById('debug-index').innerText = `${this.enemyManager.currentIndex} / ${this.enemyManager.scenario.length}`;
-            const loadEl = document.getElementById('debug-load');
-            if (loadEl) loadEl.innerText = this.entities.length + this.particles.length;
-        } else {
-            debugEl.style.display = 'none';
-        }
     }
 }
 
