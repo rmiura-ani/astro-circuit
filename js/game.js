@@ -35,6 +35,7 @@ class Game {
         this.isRunning = false;
         this.isCleared = false;
         this.frame = 0;
+        this.isBossActive = false;
         this.gameOverTimer = 0;
         this.clearTimer = 0;
         this.escCount = 0;
@@ -159,6 +160,7 @@ class Game {
 
         this.isCleared = false;
         this.frame = 0;    
+        this.isBossActive = false;
         this.gameOverTimer = 0;
         this.clearTimer = 0;
         this.escCount = 0;
@@ -308,7 +310,7 @@ class Game {
                 }
             }
         }
-        if (this.frame % 5 === 0) this.score += isFiring ? 20 : 30;
+        if (this.player.alive && !this.isBossActive && this.frame % 5 === 0 ) this.score += isFiring ? 20 : 30;   // 生存ボーナス（ボス戦のぞき）
     }
 
     /** 判定 */

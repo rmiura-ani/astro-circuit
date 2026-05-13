@@ -147,6 +147,7 @@ class EnemyManager {
 
             case 'boss':
                 enemy = new BossEnemy(game, x, y, bType, hp);
+                game.isBossActive = true;
                 break;
 
             case 'straight':

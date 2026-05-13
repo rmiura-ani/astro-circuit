@@ -13,13 +13,14 @@
  */
 class SystemController {
     constructor() {
-        this.VERSION = "0.40";
+        this.VERSION = "0.41";
         this.canvas = document.getElementById('game-canvas');
 
         // ブランチ名 or タグ名　をもとに assetBase を決定
         const urlParams = new URLSearchParams(window.location.search);
         const tag = urlParams.get('tag');
         const refPath = tag ? `tags/${tag}` : `heads/${urlParams.get('branch') || 'main'}`;
+        this.branch = urlParams.get('branch') || 'main';
         this.assetBase = `https://raw.githubusercontent.com/rmiura-ani/void-circuit-assets/refs/${refPath}/`;
 
         // サブシステムの初期化
@@ -62,8 +63,8 @@ class SystemController {
             this.audio.initAudio();
             await Promise.all([this.audio.preloadAll(), this.assets.loadImages()]);
             const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
-            const scenarioPath = isLocal ? './scenario.json' : assetBase + 'scenario.json';
-            const scenarioName = isLocal ? 'LOCAL' : branch.toUpperCase;
+            const scenarioPath = isLocal ? './scenario.json' : this.assetBase + 'scenario.json';
+            const scenarioName = isLocal ? 'LOCAL' : this.branch.toUpperCase();
             this.enemyManager.loadScenario(scenarioPath, scenarioName);
 
             // ハイスコア（ストレージから呼び出して表示）
