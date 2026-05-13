@@ -26,12 +26,14 @@ class Game {
         // 内部状態
         this._score = 0;
         this._lives = controller.config.lives;
+        this._weaponMode = 'STRAIGHT';
         this.stats = { enemiesSpawned: 0, enemiesKilled: 0, shotsFired: 0, shotsHit: 0 };
-        
+        this.isInvincibleCheat = false;
+
         this.sessionRecord = null;
 
         this.isRunning = false;
-        this.weaponMode = 'STRAIGHT';
+        this.isCleared = false;
         this.frame = 0;
         this.gameOverTimer = 0;
         this.clearTimer = 0;
@@ -81,7 +83,6 @@ class Game {
     }
 
     // --- ライフ制御 ---
-
     set currentLives(val) {
         this._lives = val;
         this.updateLivesUI();
@@ -96,10 +97,26 @@ class Game {
         el.innerText = count === 0 ? "" : (count <= 3 ? icon.repeat(count) : `${icon}x${count}`);
     }
 
+    // --- 武器制御 ---
+    set weaponMode(val) {
+        this._weaponMode = val;
+        this.updateWeaponUI();
+    }
+    get weaponMode() { return this._weaponMode; }
+
+    updateWeaponUI() {
+        const displayEl = document.getElementById('weapon-display');
+        const hintEl = document.getElementById('weapon-hint');
+        if (displayEl) {
+            displayEl.innerText = `WEAPON: ${this.weaponMode}`;
+            displayEl.className = (this.weaponMode === 'WIDE') ? 'mode-wide' : '';
+        }
+        if (hintEl) hintEl.innerText = '[X]Key OR TAP SIDE-UI TO CHANGE';
+    }
+
     // --- ゲームフロー ---
     /** ゲーム開始 */
     start(initialInputMode) {
-
         document.getElementById('start-screen').style.display = 'none';
         document.getElementById('hi-score-display').classList.remove('counter-stop');
         document.getElementById('weapon-container').style.display = 'block';
@@ -119,17 +136,18 @@ class Game {
 
         this.isRunning = true;
         this.sc.audio.playBGM('stage1');
+
+        Analytics.logLevelStart(this.sessionRecord);
     }
 
     /** 初期化 */
     reset() {
-        this.player = new Player(this, this.width / 2 - 16, this.height - 80);
-        this.entities = [];
-        this.particles = [];
-        this.frame = 0;
         this.score = 0;
         this.currentLives = this.sc.config.lives;
+        this.weaponMode = 'STRAIGHT';
+        this.stats = { enemiesSpawned: 0, enemiesKilled: 0, shotsFired: 0, shotsHit: 0 };
         this.isInvincibleCheat = this.sc.config.isInvincibleCheat;
+
         this.sessionRecord = {
             missionName: this.enemyManager.scenarioName,
             difficulty: this.sc.config.difficulty,
@@ -138,12 +156,21 @@ class Game {
             inputMode: "NONE",
             cheatUsed: this.sc.config.isInvincibleCheat
         };        
-        this.stats = { enemiesSpawned: 0, enemiesKilled: 0, shotsFired: 0, shotsHit: 0 };
-    
+
         this.isCleared = false;
+        this.frame = 0;    
+        this.gameOverTimer = 0;
+        this.clearTimer = 0;
+        this.escCount = 0;
+        this.escTimer = null;
+
+        this.entities = [];
+        this.particles = [];
+        this.scoreTexts = [];
+        this.player = new Player(this, this.width / 2 - 16, this.height - 80);
+
         this.enemyManager.reset();
         this.sc.audio.resetBGM();
-        this.updateWeaponUI();
     }
 
     /** キー入力 */
@@ -177,13 +204,13 @@ class Game {
             this.currentLives = 0;
             this.gameOverTimer = 180;
             this.onPlayerMiss(); // 爆発演出
+            this.sc.audio.fadeOutBGM(3000);
             this.endSession("EMERGENCY EXIT");
         } else {
             // 1秒以内に2回目が来なければカウントを戻す
             this.escTimer = setTimeout(() => {
                 this.escCount = 0;
                 this.escTimer = null;
-                console.log("ESC COUNT RESET");
             }, 1000);
         }
     }
@@ -258,18 +285,6 @@ class Game {
     toggleWeapon() {
         this.weaponMode = (this.weaponMode === 'STRAIGHT') ? 'WIDE' : 'STRAIGHT';
         this.sc.audio.playChangeWp();
-        this.updateWeaponUI();
-    }
-
-    /** 武器表示更新 */
-    updateWeaponUI() {
-        const displayEl = document.getElementById('weapon-display');
-        const hintEl = document.getElementById('weapon-hint');
-        if (displayEl) {
-            displayEl.innerText = `WEAPON: ${this.weaponMode}`;
-            displayEl.className = (this.weaponMode === 'WIDE') ? 'mode-wide' : '';
-        }
-        if (hintEl) hintEl.innerText = '[X]Key OR TAP SIDE-UI TO CHANGE';
     }
 
     /** ショット */
@@ -454,23 +469,27 @@ class Game {
             this.ctx.fillRect(0, 180, 320, 100);
             this.ctx.fillStyle = '#FFF';
             this.ctx.fillText('GAME OVER', 160, 230);
-            if (this.gameOverTimer === 180) this.endSession("GAME OVER");
+            if (this.gameOverTimer > 180) this.endSession("GAME OVER");
         }
         if (this.isCleared) {
             this.clearTimer++;
             this.ctx.fillStyle = '#0FF';
             this.ctx.fillText('STAGE 1 CLEAR', 160, 240);
-            if (this.clearTimer === 301) this.endSession("CONGRATULATIONS!");
+            if (this.clearTimer > 301) this.endSession("CONGRATULATIONS!");
         }
     }
 
     /** ゲーム終了 */
     endSession(msg) {
         if (!this.isRunning && this.gameOverTimer > 182) return;
+
         this.isRunning = false;
+        Analytics.logLevelEnd(this.stats, this.sessionRecord, this.isCleared);
+
         const isNew = this.score > this.sc.highScore && this.score > 0;
         if (isNew) {
             this.sc.highScore = this.score;
+            Analytics.logAchievement('HI_SCORE_BREAK');
         }
         document.getElementById('weapon-container').style.display = 'none';
         this.sc.showStartScreen(msg, isNew);

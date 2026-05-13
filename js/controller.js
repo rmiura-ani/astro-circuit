@@ -13,7 +13,7 @@
  */
 class SystemController {
     constructor() {
-        this.VERSION = "0.39";
+        this.VERSION = "0.40";
         this.canvas = document.getElementById('game-canvas');
 
         // ブランチ名 or タグ名　をもとに assetBase を決定
