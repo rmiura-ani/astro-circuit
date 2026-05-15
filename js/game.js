@@ -36,6 +36,7 @@ class Game {
         this.isCleared = false;
         this.frame = 0;
         this.isBossActive = false;
+        this.bossStartTime = 0;
         this.gameOverTimer = 0;
         this.clearTimer = 0;
         this.escCount = 0;
@@ -161,6 +162,7 @@ class Game {
         this.isCleared = false;
         this.frame = 0;    
         this.isBossActive = false;
+        this.bossStartTime = 0;
         this.gameOverTimer = 0;
         this.clearTimer = 0;
         this.escCount = 0;
@@ -340,32 +342,31 @@ class Game {
                     this.stats.shotsHit++;
                     
                     if (enemy.takeDamage(1)) {
-                        const amount = 50 * enemy.maxHp * (enemy.maxHp + 1);
-                        this.score += amount
                         this.stats.enemiesKilled++;
-                        this.scoreTexts.push(new ScoreText(enemy.x, enemy.y, amount, amount >= 5000 ? "#ff0" : "#fff"));
-
-                        // 個別演出
+                        this.calculateAttachScore(enemy); // 撃破スコア表示
                         if (typeof enemy.onDie === 'function') {
-                            enemy.onDie(this); // gameインスタンス(this)を渡す
+                            enemy.onDie(this);            // 撃破演出
                         }
-
-                        // 爆発エフェクトの発生位置を「敵の中心」に修正
-                        const centerX = enemy.x + enemy.width / 2;
-                        const centerY = enemy.y + enemy.height / 2;
-                        this.createExplosion(centerX, centerY, enemy);
                         
                     } else {
                         // --- 敵に弾が当たったが、まだ生きている時の処理 ---
-                        this.score += 10;
+                        const amount = 10;
+                        this.score += amount;
                         this.sc.audio.playHitSound();
                         this.particles.push(new Particle(bullet.x, bullet.y));
+                        // ボスだけは、点を出す
+                        if (enemy.isBoss) {
+                            const scatterX = (Math.random() - 0.5) * 10;
+                            const scatterY = (Math.random() - 0.5) * 10;
+                            this.scoreTexts.push(new ScoreText(bullet.x + scatterX, bullet.y + scatterY, `+${amount}`, "#0FF"));
+                        }
                     }
                 }
             });
         });
     }
 
+    /** あたり判定詳細 */
     isHit(r1, r2) {
         // 判定に使うサイズを決定（hitWidthがあれば優先、なければ通常のサイズ）
         const w1 = r1.hitWidth || r1.width;
@@ -384,6 +385,30 @@ class Game {
             Math.abs(r1cy - r2cy) < (h1 + h2) / 2;
     }
 
+    /**得点追加（敵撃破） */
+    calculateAttachScore(enemy){
+        const amount = 100 * enemy.maxHp * (enemy.maxHp + 1);   // 素点
+        this.score += amount
+
+        const centerX = enemy.x + enemy.width / 2;
+        let centerY;
+        if (enemy.isBoss) centerY = enemy.y + (enemy.height * 0.8);
+        else centerY = enemy.y + enemy.height / 2;
+        this.scoreTexts.push(new ScoreText(centerX, centerY, amount));
+
+        if (enemy.isBoss){
+            const elapsed = this.frame - this.bossStartTime;
+            const limit = enemy.timeLimit || 3600; // デフォルト60秒
+            const multiplier = enemy.timeMultiplier || 100;
+
+            const bonus = Math.max(0, (limit - elapsed) * multiplier);
+            if (bonus > 0) {
+                this.score += bonus;
+                this.scoreTexts.push(new ScoreText(this.width / 2, this.height / 2, ["TIME BONUS", bonus.toLocaleString()], "#0FF"));
+            }
+        }
+    }
+
     /** 爆発エフェクト */
     createExplosion(x, y, enemy) {
         const hp = enemy.maxHp || 1;
@@ -397,6 +422,12 @@ class Game {
         this.sc.audio.playExplosion();
         if (hp >= 10) setTimeout(() => this.sc.audio.playExplosion(), 200);
         if (hp >= 50) setTimeout(() => this.sc.audio.playExplosion(), 400);
+    }
+
+    /** ボス戦スタート */
+    startBossBattle() {
+        this.isBossActive = true;
+        this.bossStartTime = this.frame;
     }
 
     /** ステージクリア判定 */
@@ -437,27 +468,23 @@ class Game {
 
         if (!this.player) return;
 
-        // 1. スコアテキスト
-        this.scoreTexts.forEach(st => st.draw(this.ctx));
-
-        // 2. 弾やエフェクト（一番下）
-        this.entities.forEach(e => {
-            if (e instanceof Bullet || e instanceof EnemyBullet) e.draw(this.ctx);
-        });
+        // 1. 弾やエフェクト（一番下）
+        this.entities.forEach(e => { if (e instanceof Bullet || e instanceof EnemyBullet) e.draw(this.ctx); });
         this.particles.forEach(p => p.draw(this.ctx));
 
-        // 3. 雑魚敵（弾の上、ボスの下）
-        this.entities.forEach(e => {
-            if (e instanceof Enemy && !(e instanceof BossEnemy)) e.draw(this.ctx, this.isInvincibleCheat);
-        });
+        // 2. 雑魚敵（弾の上、ボスの下）
+        this.entities.forEach(e => { if (e instanceof Enemy && !(e instanceof BossEnemy)) e.draw(this.ctx, this.isInvincibleCheat);  });
 
-        // 4. ボス（敵の中で一番上）
-        this.entities.forEach(e => {
-            if (e instanceof BossEnemy) e.draw(this.ctx, this.isInvincibleCheat);
-        });
+        // 3. ボス（敵の中で一番上）
+        this.entities.forEach(e => { if (e instanceof BossEnemy) e.draw(this.ctx, this.isInvincibleCheat); });
 
-        // 5. 自機とUI（最前面）
+        // 4. 撃破スコアテキスト
+        this.scoreTexts.forEach(st => st.draw(this.ctx));
+
+        // 5. 自機
         this.player.draw(this.ctx);
+
+        // 6. UI（オーバーレイメッセージ）
         this.drawOverlayMessages();
     }
 

@@ -126,6 +126,8 @@ class EnemyManager {
         const hp = data.hp || 1;
         const x = data.x ?? Math.random() * game.width;
         const y = data.y ?? -32; // 基本は画面外上部
+        const timeLimit = data.timeLimit || 0;
+        const timeMultiplier =  data.timeMultiplier || 0;
 
         let enemy;
 
@@ -145,9 +147,9 @@ class EnemyManager {
                 );
                 break;
 
-            case 'boss':
-                enemy = new BossEnemy(game, x, y, bType, hp);
-                game.isBossActive = true;
+            case 'boss_01':
+                enemy = new BossEnemy_01(game, x, y, hp, timeLimit, timeMultiplier);
+                game.startBossBattle();
                 break;
 
             case 'straight':
@@ -265,26 +267,90 @@ class ScoreText {
         this.x = x;
         this.y = y;
         this.score = score;
-        this.color = color;
         this.opacity = 1.0;
-        this.life = 60; // 表示フレーム数（約1秒）
         this.isDead = false;
+
+        // 「表示タイプ」を特定
+        const flatScore = Array.isArray(score) ? score.join(" ") : String(score);
+        const numScore = typeof score === 'number' ? score : 0;
+
+        let displayType = "NORMAL";
+        if (flatScore.includes("BONUS")) {
+            displayType = "BONUS";
+        } else if (numScore >= 500000) {
+            displayType = "BOSS_KILLED";
+        } else if (numScore >= 10000) {
+            displayType = "MEDIUM_KILLED";
+        }
+
+        switch (displayType) {
+            case "BONUS":
+                this.color = "#0FF";     // シアン
+                this.fontSize = 16;      // 最大
+                this.maxLife = 120;      // 最長
+                this.speed = 0.8;
+                this.isBonus = true;
+                break;
+
+            case "BOSS_KILLED":
+                this.color = "#ff0";     // ゴールド
+                this.fontSize = 16;
+                this.maxLife = 120;
+                this.speed = 0.8;   // スッと勢いよく飛び出す
+                this.isBonus = false;
+                break;
+
+            case "MEDIUM_KILLED":
+                this.color = "#f0f";     // マゼンタ
+                this.fontSize = 11;
+                this.maxLife = 60;
+                this.speed = 0.5;   // 標準的な速度
+                this.isBonus = false;
+                break;
+
+            default: // NORMAL
+                this.color = color;      // 指定色
+                this.fontSize = 8;
+                this.maxLife = 60;
+                this.speed = 0.5;
+                this.isBonus = false;
+                break;
+        }
+
+        this.life = this.maxLife;
+        this.isBig = (displayType === "BONUS" || displayType === "BOSS_KILLED");
     }
 
     update() {
-        this.y -= 0.5;    // ゆっくり上昇
+        this.y -= this.speed;        
         this.life--;
-        this.opacity = this.life / 60; // 徐々に透明に
+        this.opacity = this.life / this.maxLife;
         if (this.life <= 0) this.isDead = true;
     }
 
     draw(ctx) {
         ctx.save();
         ctx.globalAlpha = this.opacity;
-        ctx.fillStyle = this.color;
-        ctx.font = "8px 'Press Start 2P'"; // レトロなフォント
+
+        ctx.font = `${this.fontSize}px 'Press Start 2P'`;
         ctx.textAlign = "center";
-        ctx.fillText(this.score, this.x, this.y);
+        ctx.textBaseline = "middle"; // 中央揃え
+        
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = (this.isBig || this.isBonus) ? 4 : 2;
+        ctx.fillStyle = this.color;
+
+        // --- 複数行描画の処理 ---
+        const lines = Array.isArray(this.score) ? this.score : [String(this.score)];
+        const lineHeight = this.fontSize * 1.4;
+
+        lines.forEach((line, index) => {
+            const text = (typeof line === 'number') ? line.toLocaleString() : line;
+            const drawY = this.y + (index - (lines.length - 1) / 2) * lineHeight;
+            ctx.strokeText(text, this.x, drawY);
+            ctx.fillText(text, this.x, drawY);
+        });
+
         ctx.restore();
     }
 }

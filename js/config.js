@@ -28,7 +28,7 @@ class ConfigManager {
         // --- 設定値（OPTIONSから取得） ---
         this.difficulty = this.OPTIONS.difficulty[1]; // 'NORMAL'
         this.lives      = this.OPTIONS.lives[2];      // 3
-        this.extend     = this.OPTIONS.extend[1];     // 5000000        
+        this.extend     = this.OPTIONS.extend[1];     // 5,000,000        
         this.soundTestIndex = 0;
         this.bgmTestIndex = 0;
         this.isInvincibleCheat = false;

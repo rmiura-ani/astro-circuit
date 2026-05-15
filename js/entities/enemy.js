@@ -140,6 +140,13 @@ class Enemy extends Entity {
 
         ctx.restore();
     }
+
+    // 通常演出（特殊演出は各クラスで上書き）
+    onDie(game) {
+        const centerX = this.x + this.width / 2;
+        const centerY = this.y + this.height / 2;
+        game.createExplosion(centerX, centerY, this);
+    }
 }
 
 

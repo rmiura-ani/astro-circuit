@@ -26,17 +26,24 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     color: var(--color-white);
     font-family: 'Press Start 2P', cursive;
 }
 
+a {
+    color: #0FF;
+    text-decoration: underline;
+}
+
 #game-container {
     container-type: size;
     position: relative;
-    width: auto; 
-    height: 80vh;
+    width: 95vw; 
+    height: 80dvh;
+    max-width: calc(80dvh * 2 / 3);
+    max-height: 80dvh;
     aspect-ratio: 2 / 3;
     background: var(--color-black);
     box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
@@ -62,23 +69,26 @@ canvas {
     left: 0;
     width: 100%;
     height: 100%;
-    padding: 15px 10px;
+    padding: 3cqw; 
     box-sizing: border-box;
-    display: flex;
-    justify-content: space-between;
     pointer-events: none; 
     z-index: var(--z-ui-hud);
+    display: block; 
 }
 
 #score-display, 
 #hi-score-display {
-    font-family: 'Press Start 2P', cursive;
+    position: absolute;
+    top: 3cqw;
     font-size: 2.5cqw;
     color: var(--color-white);
-    text-shadow: 2px 2px 0px var(--color-black);
+    text-shadow: 0.4cqw 0.4cqw 0px var(--color-black);
     line-height: 1;
     white-space: nowrap;
 }
+
+#score-display { left: 3cqw; }
+#hi-score-display { right: 3cqw; }
 
 .counter-stop {
     color: var(--color-gold) !important;
@@ -87,11 +97,10 @@ canvas {
 
 #lives-display {
     position: absolute;
-    top: 25px;
-    left: 10px;
+    top: 6cqw;
+    left: 3cqw;
     color: var(--color-white);
-    font-family: 'Press Start 2P', cursive;
-    font-size: 12px;
+    font-size: 3cqw;
     text-shadow: 2px 2px 0px var(--color-black);
     pointer-events: none;
 }
@@ -119,31 +128,30 @@ canvas {
     border: 1px solid #0f0;
     z-index: 1000;
     pointer-events: none;
+    display: none;
 }
 
 /* 武器情報全体のコンテナ */
 #weapon-container {
-    display: none;
+    display: flex;
+    flex-direction: column;
     position: absolute;
-    bottom: 15px;
-    right: 15px;
+    bottom: 3cqw;
+    right: 3cqw;
     text-align: right;
-    font-family: 'Press Start 2P', cursive;
     pointer-events: none;
 }
 
 #weapon-display {
-    font-size: 11px;
+    font-size: 3cqw;
     color: var(--color-cyan);
-    text-shadow: 0 0 5px rgba(0, 255, 255, 0.7);
-    margin-bottom: 4px;
-    transition: color 0.2s, text-shadow 0.2s;
+    text-shadow: 0 0 1cqw rgba(0, 255, 255, 0.7);
+    margin-bottom: 0.5cqw;
 }
 
 #weapon-hint {
-    font-size: 7px;
+    font-size: 1.8cqw; /* 7pxから変更 */
     color: rgba(255, 255, 255, 0.4);
-    letter-spacing: -0.5px;
     animation: weapon-blink 2s infinite;
 }
 
@@ -272,6 +280,21 @@ canvas {
     margin-top: 10px;
 }
 
+#config-open-btn {
+    position: absolute;
+    bottom: 4cqw;
+    left: 4cqw;
+    cursor: pointer;
+    z-index: var(--z-ui-hud);
+}
+
+#config-open-btn span {
+    font-size: 2.5cqw;
+    color: var(--color-gray-light);
+    border: 1px solid var(--color-gray-light);
+    padding: 1cqw 1.5cqw;
+}
+
 .config-item {
     display: flex;
     justify-content: space-between;
@@ -340,6 +363,27 @@ canvas {
     margin-bottom: 25px;
 }
 
+.credit-content p {
+    font-size: 14px;
+    margin-bottom: 4cqw;
+}
+
+.credit-content .small-text {
+    font-size: 14px;
+    var(--color-gray-light);
+}
+
+.credit-content .license-en-text {
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: justify;
+}
+.credit-content .license-jp-text {
+    font-size: 10px;
+    line-height: 1.4;
+    text-align: justify;
+}
+
 .scrolling .credit-content {
     animation: credit-scroll 45s linear forwards;
 }
@@ -363,9 +407,9 @@ canvas {
 /* UI・その他 */
 #version-display {
     position: absolute;
-    bottom: 5px;
-    right: 10px;
-    font-size: 8px;
+    bottom: 1cqw;
+    right: 1cqw;
+    font-size: 1.5cqw; /* 8pxから変更 */
     color: var(--color-gray-dark);
 }
 

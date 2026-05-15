@@ -13,7 +13,7 @@
  */
 class SystemController {
     constructor() {
-        this.VERSION = "0.41";
+        this.VERSION = "0.42";
         this.canvas = document.getElementById('game-canvas');
 
         // ブランチ名 or タグ名　をもとに assetBase を決定
@@ -201,7 +201,7 @@ class SystemController {
     generateShareText() {
         return `PROJECT: VOID-CIRCUIT v${this.VERSION}\n` +
                `----------------------------\n` +
-               `■ SCORE  : ${this.gamescore.toLocaleString()}\n` +
+               `■ SCORE  : ${this.game.score.toLocaleString()}\n` +
                `■ MISSION: ${this.getMissionCode(true)}\n` +
                `----------------------------\n` +
                `作戦完了。虚無の回路を突破せよ。\n\n` +
@@ -212,11 +212,11 @@ class SystemController {
     /** ミッション名導出 */ 
     getMissionCode(isShare = false) {
         const r = this.game.sessionRecord;
-        const diffMap = { 'EASY':'E', 'NORMAL':'N', 'HARD':'H', 'VERY HARD':'VH' };
+        const diffMap = { 'EASY':'EZ', 'NORMAL':'NM', 'HARD':'HD', 'VERY HARD':'VH' };
         const diffStr = diffMap[r.difficulty] || 'U';
         const cheatStr = r.cheatUsed ? (isShare ? '(CHEAT)' : '(CHT)') : '';
-        const extendStr = r.extend === 'NONE' ? 'OFF' : `${(r.extend/1000)}k`;
-        const livesStr = `L${r.lives}`; // ★ -L3 などの表記を作成
+        const extendStr = r.extend === 'NONE' ? 'OFF' : `${(r.extend/1000000)}M`;
+        const livesStr = `${r.lives}L`;
         const missionName = r.missionName;
 
         // 操作モード判定

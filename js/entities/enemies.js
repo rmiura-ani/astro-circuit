@@ -79,10 +79,21 @@ class StationaryEnemy extends Enemy {
  * ボスクラス：多段階攻撃と特殊演出を持つ
  */
 class BossEnemy extends Enemy {
+    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
+        const bulletType = "aim";
+        super(game, x, y, bulletType, hp);
+        this.timeLimit = timeLimit;
+        this.timeMultiplier = timeMultiplier;
+    }
+}
+
+class BossEnemy_01 extends BossEnemy {
     get imageName() { return "enemy_boss_01.webp"; }
 
-    constructor(game, x, y, bulletType, hp = 50) {
-        super(game, x, -128, bulletType, hp);
+    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
+        y = -128;
+        super(game, x, y, hp, timeLimit, timeMultiplier);
+        this.isBoss = true;
         this.width = 128;
         this.height = 128;
         this.hitWidth = 96; 
