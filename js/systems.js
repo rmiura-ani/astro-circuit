@@ -74,14 +74,15 @@ class InputManager {
 class AudioManager {
     constructor(basePath) {
         this.basePath = basePath;
-
         this.currentBgm = null;
+        this.currentBgmFileName = "";
         this.fadeInterval = null;
-        this.sounds = {};
         this.bgms = {};
-        
+        this.sounds = {};
+
+        // 起動時は空っぽにしておく
+        this.DYNAMIC_BGM_LIST = []; 
         this.CONFIG = {
-            BGM: { 'stage1': 'bgm-stage1.ogg' },
             SE: {
                 shot:      { file: 'shot.ogg',      vol: 0.3 },
                 changeWp:  { file: 'changeWp.ogg',  vol: 0.8 },
@@ -90,36 +91,16 @@ class AudioManager {
                 powerUp:   { file: 'powerUp.ogg',   vol: 0.7 },                
             }
         };
-
-        this.bgmKeys = Object.keys(this.CONFIG.BGM);
         this.seKeys = Object.keys(this.CONFIG.SE);
     }
 
-    async preloadAll() {
-        const loadAud = (a) => new Promise(r => {
-            if (!a || a.readyState >= 3) return r();
-            a.addEventListener('canplaythrough', r, { once: true });
-            a.addEventListener('error', () => r(), { once: true });
-            a.load();
-            setTimeout(r, 3000); // タイムアウト短縮
-        });
-
-        await Promise.all([
-            ...Object.values(this.bgms).map(loadAud),
-            ...Object.values(this.sounds).map(loadAud)
-        ]);
-        console.log("[Audio] Preload complete.");
+    /** Controllerから動的に構築されたBGMリストを受け取る */
+    setDynamicBGMList(list) {
+        this.DYNAMIC_BGM_LIST = list; 
     }
 
+    /** SE初期化 */
     initAudio() {
-        this.bgmKeys.forEach(key => {
-            const audio = new Audio(this.basePath + this.CONFIG.BGM[key]);
-            audio.crossOrigin = "anonymous";
-            audio.loop = true;
-            audio.volume = 0.7;
-            this.bgms[key] = audio;
-        });
-
         this.seKeys.forEach(key => {
             const conf = this.CONFIG.SE[key];
             const audio = new Audio(this.basePath + conf.file);
@@ -128,28 +109,102 @@ class AudioManager {
             this.sounds[key] = audio;
         });
     }
+    
+    /** 起動時のSEプリロード */
+    async preloadAll() {
+        const loadAud = (a) => new Promise(r => {
+            if (!a || a.readyState >= 3) return r();
+            a.addEventListener('canplaythrough', r, { once: true });
+            a.addEventListener('error', () => r(), { once: true });
+            a.load();
+            setTimeout(r, 3000);
+        });
+        await Promise.all([
+            ...Object.values(this.sounds).map(loadAud)
+        ]);
+        console.log("[Audio] System SE Preload complete.");
+    }
 
-    playBGM(key) {
-        this.resetBGM(); // 既存のBGMとフェードをクリア
-        this.currentBgm = this.bgms[key];
+    /** ステージ開始時に呼ばれる、特定のBGMの動的ロード */
+    async loadStageBGM(fileName) {
+        if (!fileName) return null;
+        
+        // すでに一度読み込んだことがあるBGMならキャッシュを返す
+        if (this.bgms[fileName]) {
+            return this.bgms[fileName];
+        }
+        
+        return new Promise((resolve) => {
+            const audio = new Audio(this.basePath + fileName);
+            audio.crossOrigin = "anonymous";
+            audio.loop = true;
+            audio.volume = 0.7;
+
+            let isResolved = false;
+
+            // 読み込み完了を待つ
+            audio.addEventListener('canplaythrough', () => {
+                if (isResolved) return;
+                isResolved = true;
+                this.bgms[fileName] = audio; // キャッシュに保存
+                resolve(audio);
+            }, { once: true });
+
+            audio.addEventListener('error', () => {
+                if (isResolved) return;
+                isResolved = true;
+                console.error(`[Audio] Failed to load BGM: ${fileName}`);
+                resolve(null);
+            }, { once: true });
+
+            audio.load();
+
+            // 【バグ修正】5秒タイムアウト時はキャッシュに壊れたデータを入れずに null を返す
+            setTimeout(() => {
+                if (isResolved) return;
+                isResolved = true;
+                console.warn(`[Audio] BGM load timeout: ${fileName}`);
+                resolve(null);
+            }, 5000);
+        });
+    }
+
+    /** BGMの再生（ファイル名指定） */
+    playBGM(fileName) {
+        if (!fileName) return;
+
+        // 同じ曲が既に流れている場合は何もしない（ボス戦後のループ時などのため）
+        if (this.currentBgmFileName === fileName && this.currentBgm && !this.currentBgm.paused) {
+            return;
+        }
+
+        this.resetBGM(); // 既存のBGMを完全停止
+
+        this.currentBgm = this.bgms[fileName];
+        this.currentBgmFileName = fileName;
+
         if (this.currentBgm) {
-            this.currentBgm.currentTime = 0;
+            this.currentBgm.currentTime = 0; // 再生直前に確実に頭出しを行う
             this.currentBgm.volume = 0.7;
-            this.currentBgm.play().catch(e => console.warn("Autoplay blocked"));
+            this.currentBgm.play().catch(e => console.warn("Autoplay blocked or audio not ready", e));
+        } else {
+            console.warn(`[Audio] BGM "${fileName}" is not loaded yet. Call loadStageBGM first.`);
         }
     }
 
+    /** BGMリセット */
     resetBGM() {
         if (this.fadeInterval) {
             clearInterval(this.fadeInterval);
             this.fadeInterval = null;
         }
+        // 動的にロードされた全BGMを安全に停止
         Object.values(this.bgms).forEach(b => {
             b.pause();
-            b.currentTime = 0;
             b.volume = 0.7;
         });
         this.currentBgm = null;
+        this.currentBgmFileName = "";
     }
 
     fadeOutBGM(duration = 2000) {
@@ -172,15 +227,24 @@ class AudioManager {
         }, intervalTime);
     }
 
+    /**
+     * 【大改修】同一SEの重なり再生に対応した内部メソッド
+     */
     _playSE(key) {
-        const s = this.sounds[key];
-        if (s) {
-            s.currentTime = 0;
-            s.play().catch(() => {});
+        const baseAudio = this.sounds[key];
+        if (baseAudio) {
+            // 元のAudioオブジェクトを複製（クローン）して同時発音数を無限化する
+            const clone = baseAudio.cloneNode(true);
+            clone.volume = baseAudio.volume; // 音量を引き継ぐ
+            clone.play().catch(() => {});
+            
+            // 再生終了後にメモリから解放されるようにする
+            clone.addEventListener('ended', () => {
+                clone.remove();
+            }, { once: true });
         }
     }
 
-    // SE Shortcut Methods
     playShot() { this._playSE('shot'); }
     playChangeWp() { this._playSE('changeWp'); }
     playExplosion() { this._playSE('explosion'); }
@@ -188,10 +252,18 @@ class AudioManager {
     playPowerUp() { this._playSE('powerUp'); }
 
     // Sound Test Helpers
-    get bgmCount() { return this.bgmKeys.length; }
+    get bgmCount() { return this.DYNAMIC_BGM_LIST.length; }
     get seCount() { return this.seKeys.length; }
-    getBGMName(idx) { return this.bgmKeys[idx]?.toUpperCase() || "NONE"; }
+    getBGMName(idx) { return this.DYNAMIC_BGM_LIST[idx]?.displayName.toUpperCase() || "NONE"; }
     getSEName(idx) { return this.seKeys[idx]?.toUpperCase() || "NONE"; }
-    playBGMByIndex(idx) { this.playBGM(this.bgmKeys[idx]); }
+    
+    async playBGMByIndex(idx) {
+        const bgmData = this.DYNAMIC_BGM_LIST[idx];
+        if (!bgmData) return;
+
+        const fileName = bgmData.fileName;
+        await this.loadStageBGM(fileName);
+        this.playBGM(fileName);
+    }
     playSEByIndex(idx) { this._playSE(this.seKeys[idx]); }
 }

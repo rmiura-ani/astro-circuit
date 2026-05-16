@@ -13,42 +13,23 @@
  */
 class Game {
     constructor(controller) {
-
         this.sc = controller; // SystemControllerへの参照
-        this.enemyManager = controller.enemyManager;
+        this.ScenarioManager = controller.ScenarioManager;
         this.canvas = controller.canvas;
         this.ctx = this.canvas.getContext('2d');
         this.width = GAME_CONFIG.WIDTH;
         this.height = GAME_CONFIG.HEIGHT;
+        this.background = new BackgroundManager(this.width, this.height);
+        this.assets = controller.assets;
 
-        this.stars = new Starfield(this.width, this.height);
-        
         // 内部状態
         this._score = 0;
         this._lives = controller.config.lives;
         this._weaponMode = 'STRAIGHT';
-        this.stats = { enemiesSpawned: 0, enemiesKilled: 0, shotsFired: 0, shotsHit: 0 };
-        this.isInvincibleCheat = false;
-
-        this.sessionRecord = null;
 
         this.isRunning = false;
-        this.isCleared = false;
-        this.frame = 0;
-        this.isBossActive = false;
-        this.bossStartTime = 0;
-        this.gameOverTimer = 0;
-        this.isVictorySequence = false;
-        this.victoryTimer = 0;
-        this.clearTimer = 0;
-        this.escCount = 0;
-        this.escTimer = null;
-        
-        this.assets = controller.assets;
-        this.entities = [];
-        this.particles = [];
-        this.scoreTexts = [];
-        this.player = null;
+
+        this.reset();
 
         // イベントリスナーの保持（破棄用）
         this._boundKeyDown = (e) => this.handleKeyDown(e);
@@ -68,13 +49,14 @@ class Game {
             scoreEl.innerText = `SCORE: ${this.score.toString().padStart(8, '0')}`;
             if (this.score >= 99999990 && !this.hasCounterStopped) {
                 scoreEl.classList.add('counter-stop');
-                this.sc.audio.playPowerUp();
+                if (this.sc.audio) this.sc.audio.playPowerUp();
                 this.hasCounterStopped = true;
             }
         }
+        
         if (!this.hasExtended && this.extendThreshold !== 'NONE' && this.score >= this.extendThreshold) {
             this.currentLives++;
-            this.sc.audio.playPowerUp();
+            if (this.sc.audio) this.sc.audio.playPowerUp();
             this.hasExtended = true;
             this.triggerExtendBlink();
         }
@@ -119,41 +101,20 @@ class Game {
     }
 
     // --- ゲームフロー ---
-    /** ゲーム開始 */
-    start(initialInputMode) {
-        document.getElementById('start-screen').style.display = 'none';
-        document.getElementById('hi-score-display').classList.remove('counter-stop');
-        document.getElementById('weapon-container').style.display = 'block';
-
-        const diffParams = {
-            'EASY': { enemySpeed: 0.8, fireRate: 0.7 },
-            'NORMAL': { enemySpeed: 1.0, fireRate: 1.0 },
-            'HARD': { enemySpeed: 1.1, fireRate: 1.5 },
-            'VERY HARD': { enemySpeed: 1.3, fireRate: 2.0 }
-        };
-        this.enemyManager.setDifficulty(diffParams[this.sc.config.difficulty]);
-        
-        this.reset();
-        window.addEventListener('keydown', this._boundKeyDown);
-        window.addEventListener('mousedown', this._boundMouseDown);
-        this.sessionRecord.inputMode = initialInputMode;
-
-        this.isRunning = true;
-        this.sc.audio.playBGM('stage1');
-
-        Analytics.logLevelStart(this.sessionRecord);
-    }
-
     /** 初期化 */
     reset() {
-        this.score = 0;
-        this.currentLives = this.sc.config.lives;
-        this.weaponMode = 'STRAIGHT';
+        this._score = 0;
+        this._lives = this.sc.config.lives;
+        this._weaponMode = 'STRAIGHT';
         this.stats = { enemiesSpawned: 0, enemiesKilled: 0, shotsFired: 0, shotsHit: 0 };
         this.isInvincibleCheat = this.sc.config.isInvincibleCheat;
 
+        this.extendThreshold = this.sc.config.extend; 
+        this.hasExtended = false;
+        this.hasCounterStopped = false;
+
         this.sessionRecord = {
-            missionName: this.enemyManager.scenarioName,
+            missionName: this.ScenarioManager.scenarioName,
             difficulty: this.sc.config.difficulty,
             extend: this.sc.config.extend,
             lives: this.sc.config.lives,
@@ -161,22 +122,81 @@ class Game {
             cheatUsed: this.sc.config.isInvincibleCheat
         };        
 
+        this.currentStageNum = 1;
         this.isCleared = false;
         this.frame = 0;    
         this.isBossActive = false;
         this.bossStartTime = 0;
+        this.postBossTimer = 0;
         this.gameOverTimer = 0;
         this.clearTimer = 0;
+        this.respawnTimer = 0;
         this.escCount = 0;
         this.escTimer = null;
 
         this.entities = [];
         this.particles = [];
         this.scoreTexts = [];
-        this.player = new Player(this, this.width / 2 - 16, this.height - 80);
+        this.player = new Player(this, GAME_CONFIG.WIDTH / 2 - 16, GAME_CONFIG.HEIGHT - 80);
 
-        this.enemyManager.reset();
-        this.sc.audio.resetBGM();
+        this.ScenarioManager.reset();
+        if (this.sc.audio) this.sc.audio.resetBGM();
+    }
+
+    /** ゲーム開始 */
+    async start(initialInputMode, startStage = 1) {
+        document.getElementById('start-screen').style.display = 'none';
+        
+        const hiScoreDisplay = document.getElementById('hi-score-display');
+        if (hiScoreDisplay) hiScoreDisplay.classList.remove('counter-stop');
+        
+        const weaponContainer = document.getElementById('weapon-container');
+        if (weaponContainer) weaponContainer.style.display = 'block';
+
+        const diffParams = {
+            'EASY': { enemySpeed: 0.8, fireRate: 0.7 },
+            'NORMAL': { enemySpeed: 1.0, fireRate: 1.0 },
+            'HARD': { enemySpeed: 1.1, fireRate: 1.5 },
+            'VERY HARD': { enemySpeed: 1.3, fireRate: 2.0 }
+        };
+        this.ScenarioManager.setDifficulty(diffParams[this.sc.config.difficulty]);
+        
+        this.reset();
+
+        window.removeEventListener('keydown', this._boundKeyDown);
+        window.removeEventListener('mousedown', this._boundMouseDown);
+        window.addEventListener('keydown', this._boundKeyDown);
+        window.addEventListener('mousedown', this._boundMouseDown);
+        
+        this.sessionRecord.inputMode = initialInputMode;
+
+        await this.initStage(startStage);
+        Analytics.logLevelStart(this.sessionRecord);
+        this.isRunning = true;
+    }
+
+    /** ステージ情報を動的にセットアップ */
+    async initStage(stageNum) {
+        this.currentStageNum = stageNum;
+        this.isBossActive = false;
+        this.bossStartTime = 0;
+        this.postBossTimer = 0; 
+        this.isCleared = false;
+        this.clearTimer = 0;
+
+        const success = await this.sc.loadStageAssets(stageNum);        
+        if (success) {
+            this.background.setup(this.ScenarioManager.bgColor, stageNum); 
+            if (this.sc.audio) this.sc.audio.playBGM(this.ScenarioManager.bgm);
+            
+            // セッションレコードの更新
+            if (this.sessionRecord) {
+                this.sessionRecord.missionName = this.ScenarioManager.scenarioName;
+            }
+            console.log(`Stage ${stageNum} "${this.ScenarioManager.stageName}" Started.`);
+        } else {
+            this.endSession("LOAD ERROR");
+        }
     }
 
     /** キー入力 */
@@ -195,25 +215,21 @@ class Game {
 
     /** ESC連打でゲーム終了 */
     handleEmergencyEscape() {
-        if (this.escTimer) {
-            clearTimeout(this.escTimer);
-        }
+        if (this.escTimer) clearTimeout(this.escTimer);
 
         this.escCount++;
         this.visualEffectWarning();
 
         if (this.escCount >= 2) {
             this.escCount = 0;
-            this.escTimer = null; // リセット
+            this.escTimer = null;
             
-            // 確実にリザルトへ送る
             this.currentLives = 0;
             this.gameOverTimer = 180;
-            this.onPlayerMiss(); // 爆発演出
-            this.sc.audio.fadeOutBGM(3000);
+            if (this.player.alive) this.onPlayerMiss(); 
+            if (this.sc.audio) this.sc.audio.fadeOutBGM(1000);
             this.endSession("EMERGENCY EXIT");
         } else {
-            // 1秒以内に2回目が来なければカウントを戻す
             this.escTimer = setTimeout(() => {
                 this.escCount = 0;
                 this.escTimer = null;
@@ -221,7 +237,7 @@ class Game {
         }
     }
 
-    /** ESC連打のVF */
+    /** ESC連打の視覚効果 */
     visualEffectWarning() {
         const container = document.getElementById('game-container');
         if (!container) return;
@@ -232,19 +248,33 @@ class Game {
 
     /** 表示更新 */
     update() {
-        this.stars.update();
+        this.background.update(this.frame);
         if (!this.isRunning) return;
 
         this.frame++;
-        this.player.update(this.sc.input, this.width, this.height);
-        this.enemyManager.update(this.frame, this);
+        this.player.update(this.sc.input, GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT);
+        this.ScenarioManager.update(this.frame, this);
 
         if (this.player.alive) {
             this.handlePlayerShooting();
             this.checkCollisions();
             this.checkClearCondition();
             this.updateInputMode();
-        }        
+        }
+        
+        if (!this.player.alive && this.currentLives > 0) {
+            this.respawnTimer++;
+            if (this.respawnTimer > 90) { 
+                this.respawnPlayer();
+                this.respawnTimer = 0;
+            }
+        }
+        if (!this.player.alive && this.currentLives <= 0) {
+            this.gameOverTimer++;
+            if (this.gameOverTimer > 180) {
+                this.endSession("GAME OVER");
+            }
+        }
         this.updateEntities();
         this.updateScoreTexts();
         this.updateDebugInfo();
@@ -259,10 +289,12 @@ class Game {
 
     /** 敵スコアテキスト更新 */
     updateScoreTexts() {
-        this.scoreTexts.forEach((st, index) => {
-            st.update();
-            if (st.isDead) this.scoreTexts.splice(index, 1);
-        });
+        for (let i = this.scoreTexts.length - 1; i >= 0; i--) {
+            this.scoreTexts[i].update();
+            if (this.scoreTexts[i].isDead) {
+                this.scoreTexts.splice(i, 1);
+            }
+        }
     }
 
     /** デバッグ用表示の更新 */
@@ -274,25 +306,27 @@ class Game {
         }
 
         debugEl.style.display = 'block';
-        document.getElementById('debug-frame').innerText = this.frame;
-        document.getElementById('debug-scn-frame').innerText = this.enemyManager.currentScenarioFrame;
-        document.getElementById('debug-index').innerText = `${this.enemyManager.currentIndex} / ${this.enemyManager.scenario.length}`;
+        
+        const dFrame = document.getElementById('debug-frame');
+        const dScnFrame = document.getElementById('debug-scn-frame');
+        const dIndex = document.getElementById('debug-index');
+        
+        if (dFrame) dFrame.innerText = this.frame;
+        if (dScnFrame) dScnFrame.innerText = this.ScenarioManager.currentScenarioFrame;
+        if (dIndex) dIndex.innerText = `${this.ScenarioManager.currentIndex} / ${this.ScenarioManager.scenario.length}`;
 
-        // --- タイムボーナス残量の計算 ---
+        // タイムボーナス残量の計算
         const bonusEl = document.getElementById('debug-bonus-time');
-        // 画面内にボスが存在するかチェック（クラス名やフラグで判定）
         const boss = this.entities.find(e => e.isBoss); 
         
-        if (boss && this.bossStartTime > 0) {
+        if (boss && this.bossStartTime > 0 && bonusEl) {
             const elapsed = this.frame - this.bossStartTime;
             const remaining = Math.max(0, boss.timeLimit - elapsed);
-            const seconds = (remaining / GAME_CONFIG.FPS).toFixed(2); // 秒単位に変換
+            const seconds = (remaining / GAME_CONFIG.FPS).toFixed(2); 
             
             bonusEl.innerText = `${remaining}F (${seconds}s)`;
-            
-            // 残りわずかになったら赤くする演出デバッグ
             bonusEl.style.color = remaining < 600 ? "#f00" : "#0ff"; 
-        } else {
+        } else if (bonusEl) {
             bonusEl.innerText = "---";
             bonusEl.style.color = "#888";
         }
@@ -301,7 +335,7 @@ class Game {
         if (loadEl) loadEl.innerText = this.entities.length + this.particles.length;
     }
 
-    /** キーボードかマウスかどちらで遊んでいるかを記録 */
+    /** 操作モードの動的記録 */
     updateInputMode() {
         if (this.sessionRecord.inputMode === 'BOTH') return;
         const isKeyActive = (this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isPressed('ArrowUp'));
@@ -312,7 +346,7 @@ class Game {
     /** 武器選択 */
     toggleWeapon() {
         this.weaponMode = (this.weaponMode === 'STRAIGHT') ? 'WIDE' : 'STRAIGHT';
-        this.sc.audio.playChangeWp();
+        if (this.sc.audio) this.sc.audio.playChangeWp();
     }
 
     /** ショット */
@@ -323,116 +357,137 @@ class Game {
                 if (this.frame % 8 === 0) {
                     this.entities.push(new Bullet(this.player.x + 8, this.player.y, 0));
                     this.entities.push(new Bullet(this.player.x + 20, this.player.y, 0));
-                    this.stats.shotsFired += 2; // 2発分カウント
-                    this.sc.audio.playShot();
+                    this.stats.shotsFired += 2; 
+                    if (this.sc.audio) this.sc.audio.playShot();
                 }
             } else {
                 if (this.frame % 12 === 0) {
                     this.entities.push(new Bullet(this.player.x + 14, this.player.y, 0));
                     this.entities.push(new Bullet(this.player.x + 14, this.player.y, -3.5));
                     this.entities.push(new Bullet(this.player.x + 14, this.player.y, 3.5));
-                    this.stats.shotsFired += 3; // 3発分カウント
-                    this.sc.audio.playShot();
+                    this.stats.shotsFired += 3; 
+                    if (this.sc.audio) this.sc.audio.playShot();
                 }
             }
         }
-        if (this.player.alive && !this.isBossActive && this.frame % 5 === 0 ) this.score += isFiring ? 20 : 30;   // 生存ボーナス（ボス戦のぞき）
+        if (this.player.alive && !this.isBossActive && this.frame % 5 === 0 ) this.score += isFiring ? 20 : 30;   
     }
 
-    /** 判定 */
+    /** 衝突判定メイン */
     checkCollisions() {
-        if (this.player.alive && !this.player.isInvincible && !this.isInvincibleCheat) {
-            const px = this.player.x + 16, py = this.player.y + 16;
-            for (const e of this.entities) {
-                if (e instanceof Enemy || e instanceof EnemyBullet) {
-                    const dx = px - (e.x + e.width/2), dy = py - (e.y + e.height/2);
-                    if (dx*dx + dy*dy < 100) {
-                        this.onPlayerMiss();
-                        return;
-                    }
+        if (!this.player.alive) return;
+
+        const enemies = [];
+        const enemyBullets = [];
+        const playerBullets = [];
+
+        for (const e of this.entities) {
+            if (!e.active) continue;
+            if (e instanceof Enemy) enemies.push(e);
+            else if (e instanceof EnemyBullet) enemyBullets.push(e);
+            else if (e instanceof Bullet) playerBullets.push(e);
+        }
+
+        // 自機の当たり判定（自機 vs 敵、自機 vs 敵弾）
+        if (!this.player.isInvincible && !this.isInvincibleCheat) {
+            const px = this.player.x + 16;
+            const py = this.player.y + 16;
+            const PLAYER_HIT_RADIUS_SQ = 100; 
+
+            for (const e of enemies) {
+                if (this.isCircleHit(px, py, PLAYER_HIT_RADIUS_SQ, e)) {
+                    this.onPlayerMiss();
+                    return; 
+                }
+            }
+            for (const eb of enemyBullets) {
+                if (this.isCircleHit(px, py, PLAYER_HIT_RADIUS_SQ, eb)) {
+                    this.onPlayerMiss();
+                    return;
                 }
             }
         }
 
-        const currentEnemies = this.entities.filter(e => e instanceof Enemy && e.active);
-        const currentBullets = this.entities.filter(b => b instanceof Bullet && b.active);
+        // 敵の当たり判定（敵 vs 自機弾）
+        for (const enemy of enemies) {
+            // 画面外（上部すぎ）の敵は判定をスキップ
+            if (enemy.y + enemy.height < 0) continue;
 
-        currentEnemies.forEach(enemy => {
-            if (enemy.y + enemy.height < 30) return;
-            currentBullets.forEach(bullet => {
-                if (!bullet.active || !enemy.active) return;
-                if (this.isHit(bullet, enemy)) {
-                    bullet.active = false;
+            for (const pBullet of playerBullets) {
+                if (!pBullet.active) continue;
+
+                if (this.isHit(pBullet, enemy)) {
+                    pBullet.active = false;
                     this.stats.shotsHit++;
-                    
+
                     if (enemy.takeDamage(1)) {
                         this.stats.enemiesKilled++;
-                        this.calculateAttachScore(enemy); // 撃破スコア表示
-                        if (typeof enemy.onDie === 'function') {
-                            enemy.onDie(this);            // 撃破演出
-                        }
-                        if (enemy.isBoss){
-                            this.enemyManager.skipToAfterLoop();
-                            this.isVictorySequence = true;
-                            this.victoryTimer = 210;
-                        }                        
+                        this.calculateAttachScore(enemy);
+                        if (typeof enemy.onDie === 'function') enemy.onDie(this);
+                        if (enemy.isBoss) this.ScenarioManager.skipToAfterLoop();
                     } else {
-                        // --- 敵に弾が当たったが、まだ生きている時の処理 ---
                         const amount = 10;
                         this.score += amount;
-                        this.sc.audio.playHitSound();
-                        this.particles.push(new Particle(bullet.x, bullet.y));
-                        // ボスだけは、点を出す
+                        if (this.sc.audio) this.sc.audio.playHitSound();
+                        this.particles.push(new Particle(pBullet.x, pBullet.y));
+                        
                         if (enemy.isBoss) {
                             const scatterX = (Math.random() - 0.5) * 10;
                             const scatterY = (Math.random() - 0.5) * 10;
-                            this.scoreTexts.push(new ScoreText(bullet.x + scatterX, bullet.y + scatterY, `+${amount}`, "#0FF"));
+                            this.scoreTexts.push(new ScoreText(pBullet.x + scatterX, pBullet.y + scatterY, `+${amount}`, "#0FF"));
                         }
                     }
                 }
-            });
-        });
+            }
+        }
+    }
+
+    /** 円形判定のヘルパー（中心座標と半径の2乗で比較）*/
+    isCircleHit(px, py, radiusSq, target) {
+        const tx = target.x + (target.width || 32) / 2;
+        const ty = target.y + (target.height || 32) / 2;
+        const dx = px - tx;
+        const dy = py - ty;
+        return (dx * dx + dy * dy) < radiusSq;
     }
 
     /** あたり判定詳細 */
     isHit(r1, r2) {
-        // 判定に使うサイズを決定（hitWidthがあれば優先、なければ通常のサイズ）
-        const w1 = r1.hitWidth || r1.width;
-        const h1 = r1.hitHeight || r1.height;
-        const w2 = r2.hitWidth || r2.width;
-        const h2 = r2.hitHeight || r2.height;
+        const w1 = r1.hitWidth || r1.width || 8;
+        const h1 = r1.hitHeight || r1.height || 8;
+        const w2 = r2.hitWidth || r2.width || 32;
+        const h2 = r2.hitHeight || r2.height || 32;
 
-        // それぞれの中心座標を計算
-        const r1cx = r1.x + r1.width / 2;
-        const r1cy = r1.y + r1.height / 2;
-        const r2cx = r2.x + r2.width / 2;
-        const r2cy = r2.y + r2.height / 2;
+        const r1cx = r1.x + (r1.width || 8) / 2;
+        const r1cy = r1.y + (r1.height || 8) / 2;
+        const r2cx = r2.x + (r2.width || 32) / 2;
+        const r2cy = r2.y + (r2.height || 32) / 2;
 
-        // 中心からの距離ベースで判定
         return Math.abs(r1cx - r2cx) < (w1 + w2) / 2 &&
             Math.abs(r1cy - r2cy) < (h1 + h2) / 2;
     }
 
-    /**得点追加（敵撃破） */
+    /** 得点追加（敵撃破） */
     calculateAttachScore(enemy){
-        const amount = 100 * enemy.maxHp * (enemy.maxHp + 1);   // 素点
-        this.score += amount
+        const maxHp = enemy.maxHp || 1;
+        const amount = 100 * maxHp * (maxHp + 1);  
+        this.score += amount;
+        console.log(amount);
 
-        const centerX = enemy.x + enemy.width / 2;
-        let centerY;
-        if (enemy.isBoss) centerY = enemy.y + (enemy.height * 0.8);
-        else centerY = enemy.y + enemy.height / 2;
+        const centerX = enemy.x + (enemy.width || 32) / 2;
+        let centerY = enemy.isBoss ? enemy.y + ((enemy.height || 64) * 0.8) : enemy.y + (enemy.height || 32) / 2;
+        
         this.scoreTexts.push(new ScoreText(centerX, centerY, amount));
 
         if (enemy.isBoss){
             const elapsed = this.frame - this.bossStartTime;
-            const limit = enemy.timeLimit || 3600; // デフォルト60秒
+            const limit = enemy.timeLimit || 3600; 
             const multiplier = enemy.timeMultiplier || 100;
 
             const bonus = Math.max(0, (limit - elapsed) * multiplier);
             if (bonus > 0) {
                 this.score += bonus;
-                this.scoreTexts.push(new ScoreText(this.width / 2, this.height / 2, ["TIME BONUS", bonus.toLocaleString()], "#0FF"));
+                this.scoreTexts.push(new ScoreText(GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2, ["TIME BONUS", bonus.toLocaleString()], "#0FF"));
             }
         }
     }
@@ -441,15 +496,17 @@ class Game {
     createExplosion(x, y, enemy) {
         const hp = enemy.maxHp || 1;
         const count = 10 + (hp * 2);
-        const type = hp >= 10 ? 'boss' : 'enemy';
+        const type = enemy.isBoss ? 'boss' : 'enemy';
 
         for (let i = 0; i < count; i++) {
             this.particles.push(new Particle(x, y, type));
         }
 
-        this.sc.audio.playExplosion();
-        if (hp >= 10) setTimeout(() => this.sc.audio.playExplosion(), 200);
-        if (hp >= 50) setTimeout(() => this.sc.audio.playExplosion(), 400);
+        if (this.sc.audio) {
+            this.sc.audio.playExplosion();
+            if (hp >= 10) setTimeout(() => this.sc.audio.playExplosion(), 200);
+            if (hp >= 50) setTimeout(() => this.sc.audio.playExplosion(), 400);
+        }
     }
 
     /** ボス戦スタート */
@@ -458,81 +515,125 @@ class Game {
         this.bossStartTime = this.frame;
     }
 
-    /** ステージクリア判定 */
+    /** ステージクリア判定（爆発や得点演出の終了を待つ） */
     checkClearCondition() {
-        if (this.enemyManager.isFinished && this.entities.filter(e => e instanceof Enemy).length === 0) {
-            if (!this.isCleared) {
+        const hasEnemies = this.entities.some(e => e instanceof Enemy);
+        const isEnemyAllKilled = this.ScenarioManager.isFinished && !hasEnemies;
+
+        if (isEnemyAllKilled && !this.isCleared) {
+            this.postBossTimer++;
+
+            // クリアの成立条件：
+            // 条件A: 画面上の爆発エフェクトも、スコアテキストもすべて消え去って静寂が訪れた
+            // 条件B (セーフティ): 撃破から150フレーム（約2.5秒）が経過した
+            const isEffectsFinished = (this.particles.length === 0 && this.scoreTexts.length === 0);
+            const isTimeout = (this.postBossTimer >= 150);
+
+            if (isEffectsFinished || isTimeout) {
                 this.isCleared = true;
-                this.sc.audio.fadeOutBGM(3000);
+                this.clearTimer = 0; // ここからSTAGE CLEAR文字表示用のタイマーがスタート
+                if (this.sc.audio) this.sc.audio.fadeOutBGM(3000); // BGMフェードアウト開始
+                console.log(`[System] All effects finished at frame ${this.postBossTimer}. Stage Cleared.`);
             }
+        }
+
+        if (this.isCleared) {
+            this.clearTimer++;
+            if (this.clearTimer === 180) { // STAGE CLEAR表示から3秒後に次へ
+                this.goToNextStage();
+            }        
         }
     }
 
-    /** ミス */
+    /** 次ステージへ */
+    goToNextStage() {
+        if (this.currentStageNum < 7) {
+            this.currentStageNum++;
+            this.isCleared = false;
+            this.clearTimer = 0;
+            this.frame = 0; 
+            this.initStage(this.currentStageNum);
+        } else {
+            this.endSession("ALL STAGES CLEARED!");
+        }
+    }
+
+    /** 被弾ミス */
     onPlayerMiss() {
         if (!this.player.alive) return;
         this.player.alive = false;
-        this.sc.audio.playExplosion();
-        for (let i = 0; i < 30; i++) this.particles.push(new Particle(this.player.x + 16, this.player.y + 16, 'player'));
+        this.respawnTimer = 0; // タイマー初期化
+        
+        if (this.sc.audio) this.sc.audio.playExplosion();
+        for (let i = 0; i < 30; i++) {
+            this.particles.push(new Particle(this.player.x + 16, this.player.y + 16, 'player'));
+        }
+        
         this.currentLives--;
-        if (this.currentLives > 0) setTimeout(() => this.respawnPlayer(), 1500);
-        else this.sc.audio.fadeOutBGM();
+        if (this.currentLives <= 0 && this.sc.audio) {
+            this.sc.audio.fadeOutBGM();
+        }
     }
 
     /** リスポーン */
     respawnPlayer() {
-        this.player.x = this.width / 2 - 16;
-        this.player.y = this.height - 80;
+        this.player.x = GAME_CONFIG.WIDTH / 2 - 16;
+        this.player.y = GAME_CONFIG.HEIGHT - 80;
         this.player.alive = true;
         this.player.setInvincible(180);
     }
 
-    /** 描画 */
+    /** 描画マスタ */
     draw() {
-        // 1. 背景
+        // 1. 背景のクリアと描画
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.width, this.height);
-        this.stars.draw(this.ctx);
-
+        this.background.draw(this.ctx);
+        
         if (!this.player) return;
 
-        // 1. 弾やエフェクト（一番下）
+        // 2. 弾やエフェクト（一番下）
         this.entities.forEach(e => { if (e instanceof Bullet || e instanceof EnemyBullet) e.draw(this.ctx); });
         this.particles.forEach(p => p.draw(this.ctx));
 
-        // 2. 雑魚敵（弾の上、ボスの下）
-        this.entities.forEach(e => { if (e instanceof Enemy && !(e instanceof BossEnemy)) e.draw(this.ctx, this.isInvincibleCheat);  });
+        // 3. 雑魚敵（弾の上、ボスの下：isBossプロパティで正確に選別）
+        this.entities.forEach(e => { if (e instanceof Enemy && !e.isBoss) e.draw(this.ctx, this.isInvincibleCheat); });
 
-        // 3. ボス（敵の中で一番上）
-        this.entities.forEach(e => { if (e instanceof BossEnemy) e.draw(this.ctx, this.isInvincibleCheat); });
+        // 4. ボス（敵の中で一番上）
+        this.entities.forEach(e => { if (e instanceof Enemy && e.isBoss) e.draw(this.ctx, this.isInvincibleCheat); });
 
-        // 4. 撃破スコアテキスト
+        // 5. 撃破スコアテキスト
         this.scoreTexts.forEach(st => st.draw(this.ctx));
 
-        // 5. 自機
+        // 6. 自機
         this.player.draw(this.ctx);
 
-        // 6. UI（オーバーレイメッセージ）
+        // 7. UI（オーバーレイメッセージ）
         this.drawOverlayMessages();
     }
 
-    /** Overlayメッセージ(GAME OVER等） */
+    /** Overlayメッセージ */
     drawOverlayMessages() {
         this.ctx.font = '16px "Press Start 2P", cursive';
         this.ctx.textAlign = 'center';
+
+        // ゲームオーバー演出
         if (!this.player.alive && this.currentLives <= 0) {
-            this.gameOverTimer++;
-            this.ctx.fillStyle = 'rgba(255,0,0,0.5)';
-            this.ctx.fillRect(0, 180, GAME_CONFIG.WITDH, 100);
+            this.ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+            this.ctx.fillRect(0, GAME_CONFIG.HEIGHT / 2 - 50, GAME_CONFIG.WIDTH, 100);
             this.ctx.fillStyle = '#FFF';
-            this.ctx.fillText('GAME OVER', 160, 230);
-            if (this.gameOverTimer > 180) this.endSession("GAME OVER");
+            this.ctx.fillText('GAME OVER', GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2);
         }
+
+        // ステージクリア演出（【バグ修正】文字列のプロパティ参照バグを駆除）
         if (this.isCleared) {
-            this.clearTimer++;
+            const stageNameStr = this.ScenarioManager.stageName; 
+            
             this.ctx.fillStyle = '#0FF';
-            this.ctx.fillText('STAGE 1 CLEAR', 160, 240);
-            if (this.clearTimer > 301) this.endSession("CONGRATULATIONS!");
+            this.ctx.fillText(`STAGE ${this.currentStageNum} CLEAR`, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2);            
+            this.ctx.font = '10px "Press Start 2P", cursive';
+            this.ctx.fillStyle = '#FFF';
+            this.ctx.fillText(stageNameStr, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2 + 30);
         }
     }
 
@@ -541,6 +642,11 @@ class Game {
         if (!this.isRunning && this.gameOverTimer > 182) return;
 
         this.isRunning = false;
+        
+        // リスナーのクリーンアップ
+        window.removeEventListener('keydown', this._boundKeyDown);
+        window.removeEventListener('mousedown', this._boundMouseDown);
+
         Analytics.logLevelEnd(this.stats, this.sessionRecord, this.isCleared);
 
         const isNew = this.score > this.sc.highScore && this.score > 0;
@@ -548,13 +654,16 @@ class Game {
             this.sc.highScore = this.score;
             Analytics.logAchievement('HI_SCORE_BREAK');
         }
-        document.getElementById('weapon-container').style.display = 'none';
+        
+        const weaponContainer = document.getElementById('weapon-container');
+        if (weaponContainer) weaponContainer.style.display = 'none';
+        
         this.sc.showStartScreen(msg, isNew);
         this.sc.startIdleTimer();
     }
 }
 
-// 起動コード
+// 起動コード（グローバルループ）
 const sys = new SystemController();
 sys.init().then(() => {
     const loop = () => {

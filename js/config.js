@@ -42,7 +42,7 @@ class ConfigManager {
     }
 
     /** 設定画面を開く */
-    open() {
+    async open() {
         this.isMode = true;
         this.startScreenEl.style.display = 'none';
         this.screenEl.style.display = 'flex';
@@ -57,6 +57,9 @@ class ConfigManager {
         this.updateSelection();
 
         if (this.sc.audio) this.sc.audio.resetBGM();
+
+        await this.buildDynamicSoundTestList();
+        this.refreshAllDisplay();
     }
 
     /** 設定画面を閉じる */
@@ -65,6 +68,36 @@ class ConfigManager {
         this.screenEl.style.display = 'none';
         this.startScreenEl.style.display = 'flex';
         if (this.sc.audio) this.sc.audio.resetBGM();
+    }
+
+    /** 動的にサウンドリストを構築 */
+    async buildDynamicSoundTestList() {
+        const totalStages = 7; // 総ステージ数
+        const metaPromises = [];
+
+        const base = this.sc.assetBase || "";
+
+        // 全ステージのメタデータ読み込みを並列で走らせる
+        for (let i = 1; i <= totalStages; i++) {
+            if (this.sc.ScenarioManager) {
+                metaPromises.push(this.sc.ScenarioManager.peekStageMeta(i, base));
+            }
+        }
+
+        const results = await Promise.all(metaPromises);
+        
+        // 有効なBGMが設定されているステージだけをフィルタリングして、AudioManagerにセット
+        const validBgmList = results
+            .filter(meta => meta && meta.bgm)
+            .map(meta => ({
+                fileName: meta.bgm,
+                displayName: `ST-${meta.stageNum}: ${meta.name}`
+            }));
+
+        // AudioManagerに動的リストを渡す
+        if (this.sc.audio) {
+            this.sc.audio.setDynamicBGMList(validBgmList);
+        }
     }
 
     /** キー入力処理 */
@@ -107,10 +140,14 @@ class ConfigManager {
             this[setting] = options[idx];
         } else if (setting === 'sound') {
             const len = this.sc.audio.seCount;
-            this.soundTestIndex = isRight ? (this.soundTestIndex + 1) % len : (this.soundTestIndex - 1 + len) % len;
+            if (len > 0) {
+                this.soundTestIndex = isRight ? (this.soundTestIndex + 1) % len : (this.soundTestIndex - 1 + len) % len;
+            }
         } else if (setting === 'bgm') {
             const len = this.sc.audio.bgmCount;
-            this.bgmTestIndex = isRight ? (this.bgmTestIndex + 1) % len : (this.bgmTestIndex - 1 + len) % len;
+            if (len > 0) {
+                this.bgmTestIndex = isRight ? (this.bgmTestIndex + 1) % len : (this.bgmTestIndex - 1 + len) % len;
+            }
         }
 
         this.refreshDisplay(item);
@@ -119,6 +156,7 @@ class ConfigManager {
     /** 決定時のアクション */
     handleAction() {
         const item = this.items[this.currentIndex];
+        if (!item) return;
         const setting = item.dataset.setting;
 
         if (setting === 'sound') this.playBackSoundTest();
@@ -146,7 +184,7 @@ class ConfigManager {
         }
     }
 
-    /** 「リセットしていい？」*/
+    /** 「リセットしていい？」の解除 */
     cancelResetConfirm() {
         this.resetConfirmed = false;
         this.items.forEach(item => {
@@ -175,14 +213,13 @@ class ConfigManager {
         }
     }
 
-    /** 無敵設定 */
+    /** 無敵設定（裏コマンド） */
     handleCheatCommand() {
         this.debugCCount++;
         if (this.debugCCount < 7) return;
         this.debugCCount = 0;
 
         this.isInvincibleCheat = !this.isInvincibleCheat;
-
         if (this.isInvincibleCheat) {
             if (this.sc.audio) this.sc.audio.playPowerUp();
             this.screenEl.style.color = "#FFD700";
@@ -210,7 +247,12 @@ class ConfigManager {
         } else if (setting === 'sound') {
             valEl.innerText = `< ${this.sc.audio.getSEName(this.soundTestIndex)} >`;
         } else if (setting === 'bgm') {
-            valEl.innerText = `< ${this.sc.audio.getBGMName(this.bgmTestIndex)} >`;
+            const audio = this.sc.audio;
+            if (!audio || audio.bgmCount === 0) {
+                valEl.innerText = "< LOADING... >";
+            } else {
+                valEl.innerText = `< ${audio.getBGMName(this.bgmTestIndex)} >`;
+            }
         }
     }
 
@@ -226,7 +268,6 @@ class ConfigManager {
     /** マウスイベントハンドラ セットアップ */
     setupMouseEvents() {
         this.items.forEach((item, index) => {
-            // 前回のイベントをクリアして二重登録を防ぐ
             item.onclick = null;
             item.onmouseenter = null;
 
@@ -242,7 +283,7 @@ class ConfigManager {
                     if (setting === 'sound') this.playBackSoundTest();
                     if (setting === 'bgm') this.playBackBGMTest();
                     if (this.sc.audio && setting !== 'bgm' && setting !== 'sound') {
-                        if (this.sc.audio) this.sc.audio.playHitSound();
+                        this.sc.audio.playHitSound();
                     }
                 } else {
                     this.handleAction();
@@ -259,8 +300,8 @@ class ConfigManager {
     }
 
     /** 音源テスト系 */
-    playBackSoundTest() { this.sc.audio.playSEByIndex(this.soundTestIndex); }
-    playBackBGMTest() { this.sc.audio.playBGMByIndex(this.bgmTestIndex); }
+    playBackSoundTest() { if (this.sc.audio) this.sc.audio.playSEByIndex(this.soundTestIndex); }
+    playBackBGMTest() { if (this.sc.audio) this.sc.audio.playBGMByIndex(this.bgmTestIndex); }
 
     /** 設定セーブ */
     saveConfig() {
@@ -279,17 +320,10 @@ class ConfigManager {
 
         try {
             const data = JSON.parse(saved);
-            this.difficulty = this.OPTIONS.difficulty.includes(data.difficulty)
-                ? data.difficulty
-                : this.OPTIONS.difficulty[1];
-            this.lives = this.OPTIONS.lives.includes(data.lives)
-                ? data.lives
-                : this.OPTIONS.lives[2];
-            this.extend = this.OPTIONS.extend.includes(data.extend)
-                ? data.extend
-                : this.OPTIONS.extend[1];
+            this.difficulty = this.OPTIONS.difficulty.includes(data.difficulty) ? data.difficulty : this.OPTIONS.difficulty[1];
+            this.lives = this.OPTIONS.lives.includes(data.lives) ? data.lives : this.OPTIONS.lives[2];
+            this.extend = this.OPTIONS.extend.includes(data.extend) ? data.extend : this.OPTIONS.extend[1];
             this.refreshAllDisplay();
-
         } catch (e) {
             console.error("Config corruption detected. Resetting to defaults.", e);
         }

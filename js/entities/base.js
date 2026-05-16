@@ -9,21 +9,12 @@
  */
 
 /**
- * EnemyManager 敵キャラシナリオ管理
+ * ScenarioManager 敵キャラシナリオ管理
  */
-class EnemyManager {
+class ScenarioManager {
     constructor() {
         this.REQUIRED_VERSION = 0.2;
-        this.scenario = [];
-        this.currentIndex = 0;
-        this.currentScenarioFrame = 0;
-        this.isFinished = false;
-        
-        this.speedMultiplier = 1.0;
-        this.fireRateMultiplier = 1.0;
-        
-        this.version = "0.0";
-        this.scenarioName = "UNKNOWN";
+        this.reset();
     }
 
     /** YAMLシナリオファイルをロード */
@@ -32,12 +23,9 @@ class EnemyManager {
             const res = await fetch(path);
             if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
             
-            // JSONではなくtextとして取得
+            // YAML形式でロード
             const yamlText = await res.text();
-            
-            // js-yamlでオブジェクト化
-            const data = jsyaml.load(yamlText);
-            
+            const data = jsyaml.load(yamlText);            
             if (!data) throw new Error("YAML parse failed or empty.");
 
             // バージョンチェック
@@ -45,7 +33,14 @@ class EnemyManager {
             if (parseFloat(this.version) < this.REQUIRED_VERSION) {
                 console.warn(`[Warning] Scenario v${this.version} is outdated.`);
             }
-            
+
+            this.reset();
+
+            // メタデータの抽出
+            this.stageName = data.name || "Unknown Stage";
+            this.bgm = data.bgm || "";
+            this.bgColor = data.bgColor || "#000000";
+
             // 敵データの抽出とソート
             // data.enemies があればそれを、なければデータ自体を配列として扱う
             const rawEnemies = Array.isArray(data.enemies) ? data.enemies : (Array.isArray(data) ? data : []);
@@ -53,10 +48,36 @@ class EnemyManager {
             
             this.scenarioName = scenarioName;
 
-            this.reset();
             console.log(`[System] YAML Scenario "${path}" loaded. (${this.scenario.length} events)`);
+            return true;
         } catch (e) {
             console.error("[System] Scenario Load Failed:", e);
+            return false;
+        }
+    }
+
+    /** サウンドテスト用：特定のステージのYAMLからBGM名とステージ名だけをピンポイントで取得する */
+    async peekStageMeta(stageNum, assetBase) {
+        const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
+        const fileName = `stage-${stageNum}/scenario.yaml`;
+        const scenarioPath = isLocal ? `./${fileName}` : `${assetBase}/${fileName}`;
+
+        try {
+            const res = await fetch(scenarioPath);
+            if (!res.ok) return null;
+            
+            const yamlText = await res.text();
+            const data = jsyaml.load(yamlText);
+            if (!data) return null;
+
+            return {
+                stageNum: stageNum,
+                name: data.name || `STAGE ${stageNum}`,
+                bgm: data.bgm || ""
+            };
+        } catch (e) {
+            console.warn(`[Scenario] Failed to peek meta for stage ${stageNum}`);
+            return null;
         }
     }
 
@@ -66,6 +87,7 @@ class EnemyManager {
         this.fireRateMultiplier = params.fireRate || 1.0;
     }
 
+    /** 更新 */
     update(gameFrame, game) {
         if (this.isFinished || this.scenario.length === 0) return;
 
@@ -125,10 +147,20 @@ class EnemyManager {
 
     /** リセット */
     reset() {
+        this.scenario = [];
+        this.stageName = "";
+        this.bgm = "";
+        this.bgColor = "#000000";
+        this.scenarioName = "UNKNOWN";
+
         this.currentIndex = 0;
-        this.currentScenarioFrame = 0; // リセット時も0に
+        this.currentScenarioFrame = 0;
         this.isFinished = false;
-        this.scenario.forEach(s => s.spawned = false);
+
+        this.speedMultiplier = 1.0;
+        this.fireRateMultiplier = 1.0;
+        
+        this.version = "0.0"    
     }
 
     /** 敵インスタンスの動的生成 */
@@ -273,20 +305,29 @@ class Particle extends Entity {
 }
 
 /**
- * スコアテキスト
+ * スコアテキスト：画面上に浮かび上がる得点演出
  */
 class ScoreText {
     constructor(x, y, score, color = "#fff") {
         this.x = x;
         this.y = y;
-        this.score = score;
         this.opacity = 1.0;
         this.isDead = false;
 
-        // 「表示タイプ」を特定
-        const flatScore = Array.isArray(score) ? score.join(" ") : String(score);
+        // --- 【大改修】データの整形とカンマ区切りの一元化 ---
+        // scoreが配列ならそのまま使い、数値や単一文字列なら配列に包む
+        const rawLines = Array.isArray(score) ? score : [score];
+        
+        // 配列の中身を走査し、純粋な数値（number）があればここでカンマ区切り文字列に変換する
+        this.lines = rawLines.map(line => 
+            (typeof line === 'number') ? line.toLocaleString() : String(line)
+        );
+
+        // 判定用の平滑化文字列を作成
+        const flatScore = this.lines.join(" ");
         const numScore = typeof score === 'number' ? score : 0;
 
+        // --- 表示タイプの特定 ---
         let displayType = "NORMAL";
         if (flatScore.includes("BONUS")) {
             displayType = "BONUS";
@@ -309,7 +350,7 @@ class ScoreText {
                 this.color = "#ff0";     // ゴールド
                 this.fontSize = 16;
                 this.maxLife = 120;
-                this.speed = 0.8;   // スッと勢いよく飛び出す
+                this.speed = 0.8;        // スッと勢いよく飛び出す
                 this.isBonus = false;
                 break;
 
@@ -317,7 +358,7 @@ class ScoreText {
                 this.color = "#f0f";     // マゼンタ
                 this.fontSize = 11;
                 this.maxLife = 60;
-                this.speed = 0.5;   // 標準的な速度
+                this.speed = 0.5;        // 標準的な速度
                 this.isBonus = false;
                 break;
 
@@ -347,19 +388,18 @@ class ScoreText {
 
         ctx.font = `${this.fontSize}px 'Press Start 2P'`;
         ctx.textAlign = "center";
-        ctx.textBaseline = "middle"; // 中央揃え
+        ctx.textBaseline = "middle"; 
         
         ctx.strokeStyle = "#000";
         ctx.lineWidth = (this.isBig || this.isBonus) ? 4 : 2;
         ctx.fillStyle = this.color;
 
-        // --- 複数行描画の処理 ---
-        const lines = Array.isArray(this.score) ? this.score : [String(this.score)];
+        // --- 複数行描画の処理（すでにコンストラクタで整形済みなのでシンプルに） ---
         const lineHeight = this.fontSize * 1.4;
 
-        lines.forEach((line, index) => {
-            const text = (typeof line === 'number') ? line.toLocaleString() : line;
-            const drawY = this.y + (index - (lines.length - 1) / 2) * lineHeight;
+        this.lines.forEach((text, index) => {
+            // 中心からの相対Y座標を計算
+            const drawY = this.y + (index - (this.lines.length - 1) / 2) * lineHeight;
             ctx.strokeText(text, this.x, drawY);
             ctx.fillText(text, this.x, drawY);
         });
@@ -369,7 +409,7 @@ class ScoreText {
 }
 
 /**
- * EnemyManager 敵キャラ画像管理
+ * ScenarioManager 敵キャラ画像管理
  */
 class AssetManager {
     constructor(basePath) {

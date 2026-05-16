@@ -4,7 +4,7 @@
 *.ogg
 *.jfif
 *.wepb
-scenario.json
+scenario.yaml
 
 # Windows特有のメタデータファイルを無視
 *:Zone.Identifier
