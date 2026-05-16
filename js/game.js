@@ -411,7 +411,14 @@ class Game {
         // 敵の当たり判定（敵 vs 自機弾）
         for (const enemy of enemies) {
             // 画面外（上部すぎ）の敵は判定をスキップ
-            if (enemy.y + enemy.height < 0) continue;
+            if (
+                enemy.y + enemy.height < 30 ||            // 🎯 上部30px（HUDエリア）より上なら判定をスキップ！
+                enemy.y >= GAME_CONFIG.HEIGHT ||          // 画面の下外
+                enemy.x + enemy.width <= 0 ||             // 画面の左外（スカウト機のハイド防止）
+                enemy.x >= GAME_CONFIG.WIDTH              // 画面の右外
+            ) {
+                continue;
+            }
 
             for (const pBullet of playerBullets) {
                 if (!pBullet.active) continue;

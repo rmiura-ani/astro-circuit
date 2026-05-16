@@ -100,24 +100,35 @@ class Enemy extends Entity {
     }
 
     /** 敵を描画する */
-    draw(ctx , isInvincibleCheat = false) {
+    draw(ctx, isInvincibleCheat = false) {
         ctx.save();
+
+        // 当たり判定スキップと完全に同じ条件（画面外、または上部30pxのHUDエリア内）
+        if (
+            this.y + this.height < 30 ||
+            this.y >= GAME_CONFIG.HEIGHT ||
+            this.x + this.width <= 0 ||
+            this.x >= GAME_CONFIG.WIDTH
+        ) {
+            if (Math.floor(Date.now() / 33) % 2 === 0) {
+                ctx.globalAlpha = 0.15;
+            } else {
+                ctx.globalAlpha = 0.60;
+            }
+        }
 
         if (this.isLoaded && !this.loadError) {
             // 1. 画像が正常に読み込めている場合
             ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
         } else {
             // 2. 読み込み中、またはエラー（404等）の場合
-            // 仮の■（プレースホルダー）を描画
-            ctx.fillStyle = this.loadError ? '#F00' : '#444'; // エラーなら赤、読み込み中ならグレー
+            ctx.fillStyle = this.loadError ? '#F00' : '#444';
             ctx.strokeStyle = '#FFF';
             ctx.lineWidth = 2;
             
-            // 四角形を描画
             ctx.fillRect(this.x, this.y, this.width, this.height);
             ctx.strokeRect(this.x, this.y, this.width, this.height);
 
-            // エラー時のみ、中に「×」を表示してデバッグしやすくする
             if (this.loadError) {
                 ctx.beginPath();
                 ctx.moveTo(this.x, this.y);
@@ -127,6 +138,8 @@ class Enemy extends Entity {
                 ctx.stroke();
             }
         }
+
+        // チート用のヒットボックス（ライム色の枠）描画
         if (isInvincibleCheat) {
             ctx.strokeStyle = 'lime';
             const hw = this.hitWidth || this.width;
@@ -146,31 +159,5 @@ class Enemy extends Entity {
         const centerX = this.x + this.width / 2;
         const centerY = this.y + this.height / 2;
         game.createExplosion(centerX, centerY, this);
-    }
-}
-
-
-/**
- * 敵の弾クラス
- */
-class EnemyBullet extends Entity {
-    constructor(x, y, vx, vy) {
-        super(x, y, 4, 4); // 判定は 4x4
-        this.vx = vx;
-        this.vy = vy;
-        this.renderRadius = 3; // 見た目の半径は 3（直径6）
-    }
-    /** 敵弾の移動更新と画面外判定 */
-    update() {
-        this.x += this.vx;
-        this.y += this.vy;
-        if (this.isOutOfBounds()) this.active = false;
-    }
-    /** 敵弾を描画する */
-    draw(ctx) {
-        ctx.fillStyle = '#F0F';
-        ctx.beginPath();
-        ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.renderRadius, 0, Math.PI * 2);
-        ctx.fill();
     }
 }

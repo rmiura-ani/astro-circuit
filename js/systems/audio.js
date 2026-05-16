@@ -1,72 +1,12 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * systems.js
+ * audio.js
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-
-/**
- * InputManager: 入力統合管理
- * キーボード、マウス、タッチの入力を正規化して保持します。
- */
-class InputManager {
-    constructor(canvas) {
-        this.canvas = canvas;
-        this.keys = new Set(); // Setを使って重複を防止
-        this.touchX = null;
-        this.touchY = null;
-        this.isTouching = false;
-
-        this._setupEventListeners();
-    }
-
-    _setupEventListeners() {
-        // キーボード
-        window.addEventListener('keydown', (e) => this.keys.add(e.code));
-        window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-
-        const updatePos = (e) => this._handleCoordinate(e);
-
-        // マウス
-        this.canvas.addEventListener('mousedown', (e) => { this.isTouching = true; updatePos(e); });
-        window.addEventListener('mousemove', (e) => { if (this.isTouching) updatePos(e); });
-        window.addEventListener('mouseup', () => { this.isTouching = false; });
-
-        // タッチ (iOS/Android 向け最適化)
-        const touchOptions = { passive: false };
-        this.canvas.addEventListener('touchstart', (e) => {
-            this.isTouching = true;
-            updatePos(e);
-            if (e.cancelable) e.preventDefault();
-        }, touchOptions);
-
-        this.canvas.addEventListener('touchmove', (e) => {
-            updatePos(e);
-            if (e.cancelable) e.preventDefault();
-        }, touchOptions);
-
-        this.canvas.addEventListener('touchend', () => { this.isTouching = false; });
-    }
-
-    _handleCoordinate(e) {
-        if (!this.canvas) return;
-        const rect = this.canvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        
-        // 論理サイズと実表示サイズの比率を計算
-        const scaleX = this.canvas.width / rect.width;
-        const scaleY = this.canvas.height / rect.height;
-
-        this.touchX = (clientX - rect.left) * scaleX;
-        this.touchY = (clientY - rect.top) * scaleY;
-    }
-
-    isPressed(keyCode) { return this.keys.has(keyCode); }
-}
 
 /**
  * AudioManager: サウンドライフサイクル管理
@@ -92,6 +32,11 @@ class AudioManager {
             }
         };
         this.seKeys = Object.keys(this.CONFIG.SE);
+        
+        // 🚨 【イコライザー用】Web Audio API関連の管理プロパティ
+        this.audioCtx = null;
+        this.analyser = null;
+        this.mediaSources = new Map(); // 各Audio要素とSourceNodeの紐付けキャッシュ
     }
 
     /** Controllerから動的に構築されたBGMリストを受け取る */
@@ -159,7 +104,6 @@ class AudioManager {
 
             audio.load();
 
-            // 【バグ修正】5秒タイムアウト時はキャッシュに壊れたデータを入れずに null を返す
             setTimeout(() => {
                 if (isResolved) return;
                 isResolved = true;
@@ -186,9 +130,40 @@ class AudioManager {
         if (this.currentBgm) {
             this.currentBgm.currentTime = 0; // 再生直前に確実に頭出しを行う
             this.currentBgm.volume = 0.7;
+            
+            // 🚨 【ここが核心】Audioタグの音声を Web Audio API の解析土管へバイパス接続する
+            this.setupAnalyserBridge(this.currentBgm);
+
             this.currentBgm.play().catch(e => console.warn("Autoplay blocked or audio not ready", e));
         } else {
             console.warn(`[Audio] BGM "${fileName}" is not loaded yet. Call loadStageBGM first.`);
+        }
+    }
+
+    /** Audio要素をWeb Audio APIのアナライザーノードへブリッジする */
+    setupAnalyserBridge(audioElement) {
+        // 1. 司令塔(AudioContext)がまだなければ生成
+        if (!this.audioCtx) {
+            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            this.analyser = this.audioCtx.createAnalyser();
+            this.analyser.fftSize = 64; // 32本のスペクトラムバー用
+        }
+
+        // ブラウザの自動再生ガードをすり抜ける保険
+        if (this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
+        }
+
+        // 2. このAudio要素用の「仲介ノード」が未生成なら作る（二重生成エラー防止策）
+        if (!this.mediaSources.has(audioElement)) {
+            const sourceNode = this.audioCtx.createMediaElementSource(audioElement);
+            
+            // 【重要】Audioタグ ➔ アナライザー ➔ スピーカー(destination) の順に直列繋ぎ
+            sourceNode.connect(this.analyser);
+            this.analyser.connect(this.audioCtx.destination);
+            
+            // キャッシュに保存して再利用
+            this.mediaSources.set(audioElement, sourceNode);
         }
     }
 
@@ -207,6 +182,7 @@ class AudioManager {
         this.currentBgmFileName = "";
     }
 
+    /** BGMフェードアウト */
     fadeOutBGM(duration = 2000) {
         if (!this.currentBgm || this.fadeInterval) return;
 
@@ -217,6 +193,7 @@ class AudioManager {
 
         this.fadeInterval = setInterval(() => {
             if (target.volume > volStep) {
+                
                 target.volume -= volStep;
             } else {
                 target.volume = 0;
@@ -227,9 +204,6 @@ class AudioManager {
         }, intervalTime);
     }
 
-    /**
-     * 【大改修】同一SEの重なり再生に対応した内部メソッド
-     */
     _playSE(key) {
         const baseAudio = this.sounds[key];
         if (baseAudio) {
@@ -256,14 +230,18 @@ class AudioManager {
     get seCount() { return this.seKeys.length; }
     getBGMName(idx) { return this.DYNAMIC_BGM_LIST[idx]?.displayName.toUpperCase() || "NONE"; }
     getSEName(idx) { return this.seKeys[idx]?.toUpperCase() || "NONE"; }
-    
     async playBGMByIndex(idx) {
         const bgmData = this.DYNAMIC_BGM_LIST[idx];
         if (!bgmData) return;
-
         const fileName = bgmData.fileName;
         await this.loadStageBGM(fileName);
         this.playBGM(fileName);
+    }
+    getByteFrequencyData() {
+        if (!this.analyser) return null;
+        const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+        this.analyser.getByteFrequencyData(dataArray);
+        return dataArray;
     }
     playSEByIndex(idx) { this._playSE(this.seKeys[idx]); }
 }

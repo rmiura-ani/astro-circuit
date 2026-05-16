@@ -13,7 +13,7 @@
  */
 class SystemController {
     constructor() {
-        this.VERSION = "0.46";
+        this.VERSION = "0.47";
         this.canvas = document.getElementById('game-canvas');
 
         // URLパラメータの解析（GitHub上の別ブランチやタグをテストするため）
@@ -122,7 +122,6 @@ class SystemController {
 
             // 割り出した画像をステージ開始前に一斉に裏でロード（終わるまで待つ）
             if (imagesToPreload.length > 0) {
-                console.log(`[System] Preloading stage enemies:`, imagesToPreload);
                 await this.assets.preload(imagesToPreload);
             }
 

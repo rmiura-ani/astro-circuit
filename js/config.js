@@ -2,7 +2,7 @@
  * PROJECT: VOID-CIRCUIT
  *
  * config.js
- * 
+ *
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
@@ -39,6 +39,9 @@ class ConfigManager {
         this.items = [];
 
         this.resetConfirmed = false;
+        
+        // 🚨 【新規追加】ピークホールド（イコライザーの頂点の粒）を維持するメモリ配列
+        this.peaks = new Array(32).fill(0);
     }
 
     /** 設定画面を開く */
@@ -60,6 +63,12 @@ class ConfigManager {
 
         await this.buildDynamicSoundTestList();
         this.refreshAllDisplay();
+
+        const eqCanvas = document.getElementById('eq-overlay-canvas');
+        if (eqCanvas) {
+            this.eqCtx = eqCanvas.getContext('2d');
+            this.startLoop(); // 👈 ループ自体は裏でスタンバイさせておく
+        }
     }
 
     /** 設定画面を閉じる */
@@ -68,6 +77,19 @@ class ConfigManager {
         this.screenEl.style.display = 'none';
         this.startScreenEl.style.display = 'flex';
         if (this.sc.audio) this.sc.audio.resetBGM();
+        this.peaks.fill(0);
+
+        // イコライザー枠を非表示にする
+        const eqContainer = document.getElementById('eq-container');
+        if (eqContainer) {
+            eqContainer.style.opacity = '0';
+            eqContainer.style.display = 'none';
+        }
+
+        if (this.loopId) {
+            cancelAnimationFrame(this.loopId);
+            this.loopId = null;
+        }
     }
 
     /** 動的にサウンドリストを構築 */
@@ -161,7 +183,6 @@ class ConfigManager {
 
         if (setting === 'sound') this.playBackSoundTest();
         if (setting === 'bgm') this.playBackBGMTest();
-
         if (setting === 'reset_score') {
             if (!this.resetConfirmed) {
                 this.resetConfirmed = true;
@@ -190,6 +211,7 @@ class ConfigManager {
         this.items.forEach(item => {
             item.classList.remove('danger');
             if (item.dataset.setting === 'reset_score') {
+                
                 const valEl = item.querySelector('.value');
                 if (valEl) valEl.innerText = "EXECUTE";
             }
@@ -301,7 +323,81 @@ class ConfigManager {
 
     /** 音源テスト系 */
     playBackSoundTest() { if (this.sc.audio) this.sc.audio.playSEByIndex(this.soundTestIndex); }
-    playBackBGMTest() { if (this.sc.audio) this.sc.audio.playBGMByIndex(this.bgmTestIndex); }
+    playBackBGMTest() {
+        if (this.sc.audio) {
+            this.sc.audio.playBGMByIndex(this.bgmTestIndex);
+            const eqContainer = document.getElementById('eq-container');
+            if (eqContainer) {
+                eqContainer.style.display = 'block';
+                setTimeout(() => { eqContainer.style.opacity = '1'; }, 10);
+            }
+        }
+    }
+
+    /** レトロコンポーネント風スペクトラムアナライザー描画 */
+    drawEqualizer(ctx, x, y) {
+        if (!this.sc.audio || !this.sc.audio.getByteFrequencyData) return;
+
+        const rawData = this.sc.audio.getByteFrequencyData();
+        if (!rawData) return;
+
+        const targetIndices = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        const activeCount = targetIndices.length; 
+
+        const canvasWidth = ctx.canvas.width;
+        const maxHeight = ctx.canvas.height; // 50px
+
+        const barGap = 4; 
+        const barWidth = (canvasWidth - (barGap * (activeCount - 1))) / activeCount;
+
+        ctx.save();
+
+        for (let i = 0; i < activeCount; i++) {
+            const rawIdx = targetIndices[i];
+            let rawValue = rawData[rawIdx];
+
+            let processedValue = ((rawValue - 140 + (rawIdx * 6)) * 2);
+            processedValue = Math.max(0, Math.min(255, processedValue));
+            let barHeight = (processedValue / 255) * maxHeight;
+
+            // 最終セーフティ：天井・底の突き抜け防止
+            if (rawValue > 10) {
+                barHeight = Math.max(2, Math.min(maxHeight - 4, barHeight));
+            } else {
+                barHeight = 1;  // 音が完全に消えた時は、1pxだけドットを残して通電感を出す
+            }
+
+            ctx.fillStyle = `rgb(255, ${150 + (i * 7.5)}, 0)`;
+            const barX = x + i * (barWidth + barGap);
+            const barY = y + maxHeight - barHeight;
+
+            // メインバーの描画
+            if (barHeight > 0) {
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+            }
+
+            // ピークホールドのフワッと落下演出（ここが一番綺麗に見える絶妙な速度です）
+            if (barHeight >= this.peaks[i]) {
+                this.peaks[i] = barHeight;
+            } else {
+                this.peaks[i] = Math.max(0, this.peaks[i] - 0.45); 
+            }
+
+            // ピークドットの描画
+            if (this.peaks[i] > 0) {
+                ctx.fillStyle = "rgba(255, 255, 220, 0.95)";
+                ctx.fillRect(barX, y + maxHeight - this.peaks[i], barWidth, 2);
+            }
+
+            // 横シールドスリット（レトロ液晶の再現）
+            ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+            for (let h = 0; h < maxHeight; h += 4) {
+                ctx.fillRect(barX, y + h, barWidth + 1, 1);
+            }
+        }
+
+        ctx.restore();
+    }
 
     /** 設定セーブ */
     saveConfig() {
@@ -327,5 +423,11 @@ class ConfigManager {
         } catch (e) {
             console.error("Config corruption detected. Resetting to defaults.", e);
         }
+    }
+    startLoop() {
+        if (!this.isMode || !this.eqCtx) return;
+        this.eqCtx.clearRect(0, 0, this.eqCtx.canvas.width, this.eqCtx.canvas.height);
+        this.drawEqualizer(this.eqCtx, 0, 0);
+        this.loopId = requestAnimationFrame(() => this.startLoop());
     }
 }

@@ -168,6 +168,10 @@ gtag('config', 'G-KJJQ5E61FL');
             <div class="config-item" data-setting="exit">
                 <span style="color: #0FF;">> SAVE AND EXIT</span>
             </div>
+            <div id="eq-container">
+                <div class="eq-label">AUDIO SPECTRUM ANALYSER</div>
+                <canvas id="eq-overlay-canvas"></canvas>
+            </div>
         </div>
 
         <p style="font-size: 10px; margin-top: 30px; color: #888;">
@@ -180,7 +184,9 @@ gtag('config', 'G-KJJQ5E61FL');
 <script src="js/constants.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
 <script src="js/config.js"></script>
-<script src="js/systems.js"></script>
+<script src="js/systems/scenario.js"></script>
+<script src="js/systems/input.js"></script>
+<script src="js/systems/audio.js"></script>
 <script src="js/controller.js"></script>
     
 <script src="js/entities/base.js"></script>
