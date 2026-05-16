@@ -144,7 +144,7 @@ class Game {
     }
 
     /** ゲーム開始 */
-    async start(initialInputMode, startStage = 6) {
+    async start(initialInputMode, startStage = 1) {
         document.getElementById('start-screen').style.display = 'none';
         
         const hiScoreDisplay = document.getElementById('hi-score-display');
@@ -616,8 +616,27 @@ class Game {
 
     /** Overlayメッセージ */
     drawOverlayMessages() {
+        this.ctx.save();
         this.ctx.font = '16px "Press Start 2P", cursive';
         this.ctx.textAlign = 'center';
+
+        // ステージ開始時のタイトル表示
+        if (this.frame > 0 && this.frame < 180) {
+            let alpha = 1.0;
+
+            if (this.frame <= 30) {
+                alpha = this.frame / 30;
+            } else if (this.frame > 120) {
+                alpha = (180 - this.frame) / 60;
+            }
+
+            this.ctx.font = '14px "Press Start 2P", cursive';
+            this.ctx.fillStyle = `rgba(0, 255, 255, ${alpha})`;
+            this.ctx.fillText(`STAGE ${this.currentStageNum}`, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2 - 10);
+            this.ctx.font = '10px "Press Start 2P", cursive';
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            this.ctx.fillText(this.ScenarioManager.stageName, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2 + 20);
+        }
 
         // ゲームオーバー演出
         if (!this.player.alive && this.currentLives <= 0) {
@@ -637,6 +656,7 @@ class Game {
             this.ctx.fillStyle = '#FFF';
             this.ctx.fillText(stageNameStr, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2 + 30);
         }
+        this.ctx.restore();
     }
 
     /** ゲーム終了 */

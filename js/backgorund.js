@@ -2,7 +2,8 @@
  * PROJECT: VOID-CIRCUIT
  *
  * background.js
- * * Copyright (c) 2026 あに。部長 / Ryo Miura
+ * 
+ * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
