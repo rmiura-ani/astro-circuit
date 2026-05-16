@@ -58,10 +58,8 @@ class ScenarioManager {
 
     /** サウンドテスト用：特定のステージのYAMLからBGM名とステージ名だけをピンポイントで取得する */
     async peekStageMeta(stageNum, assetBase) {
-        const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
         const fileName = `stage-${stageNum}/scenario.yaml`;
-        const scenarioPath = isLocal ? `./${fileName}` : `${assetBase}/${fileName}`;
-
+        const scenarioPath = `${assetBase}${fileName}`;
         try {
             const res = await fetch(scenarioPath);
             if (!res.ok) return null;
@@ -156,7 +154,7 @@ class ScenarioManager {
         this.currentIndex = 0;
         this.currentScenarioFrame = 0;
         this.isFinished = false;
-
+        
         this.speedMultiplier = 1.0;
         this.fireRateMultiplier = 1.0;
         

@@ -16,12 +16,24 @@ class SystemController {
         this.VERSION = "0.44";
         this.canvas = document.getElementById('game-canvas');
 
-        // ブランチ名 or タグ名をもとに assetBase を決定
+        // URLパラメータの解析（GitHub上の別ブランチやタグをテストするため）
         const urlParams = new URLSearchParams(window.location.search);
         const tag = urlParams.get('tag');
         const refPath = tag ? `tags/${tag}` : `heads/${urlParams.get('branch') || 'main'}`;
         this.branch = urlParams.get('branch') || 'main';
-        this.assetBase = `https://raw.githubusercontent.com/rmiura-ani/void-circuit-assets/refs/${refPath}/`;
+        const githubBase = `https://raw.githubusercontent.com/rmiura-ani/void-circuit-assets/refs/${refPath}/`;
+
+        // 🚀 【優先切替】ローカルなら指定されたローカルパスを強制適用、本番ならGitHub
+        const LOCAL_ASSET_ROOT = "../void-circuit-assets/";
+        this.isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
+        this.assetBase = this.isLocal ? LOCAL_ASSET_ROOT : githubBase;
+
+        // パスが必ずスラッシュ（/）で終わるように補正
+        if (!this.assetBase.endsWith("/")) {
+            this.assetBase += "/";
+        }
+
+        console.log(`[System] Asset Base Path determined: "${this.assetBase}" (Local Mode: ${this.isLocal})`);
 
         // サブシステムの初期化
         this.input = new InputManager(this.canvas);
@@ -89,11 +101,9 @@ class SystemController {
 
     /** ステージリソースのオンデマンド・ロード */
     async loadStageAssets(stageNum) {
-        const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
-        
         const fileName = `stage-${stageNum}/scenario.yaml`;
-        const scenarioPath = isLocal ? `./${fileName}` : `${this.assetBase}${fileName}`;
-        const scenarioName = isLocal ? 'LOCAL' : this.branch.toUpperCase();
+        const scenarioPath = `${this.assetBase}${fileName}`;
+        const scenarioName = this.isLocal ? 'LOCAL' : this.branch.toUpperCase();
 
         try {
             // 1. シナリオYAMLの読み込みとパース

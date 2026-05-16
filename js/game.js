@@ -144,7 +144,7 @@ class Game {
     }
 
     /** ゲーム開始 */
-    async start(initialInputMode, startStage = 1) {
+    async start(initialInputMode, startStage = 6) {
         document.getElementById('start-screen').style.display = 'none';
         
         const hiScoreDisplay = document.getElementById('hi-score-display');
@@ -517,6 +517,8 @@ class Game {
 
     /** ステージクリア判定（爆発や得点演出の終了を待つ） */
     checkClearCondition() {
+        if (this.frame < 180) return;
+
         const hasEnemies = this.entities.some(e => e instanceof Enemy);
         const isEnemyAllKilled = this.ScenarioManager.isFinished && !hasEnemies;
 
