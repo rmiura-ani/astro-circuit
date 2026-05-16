@@ -484,7 +484,8 @@ class Game {
             const limit = enemy.timeLimit || 3600; 
             const multiplier = enemy.timeMultiplier || 100;
 
-            const bonus = Math.max(0, (limit - elapsed) * multiplier);
+            const rawBonus = Math.max(0, (limit - elapsed) * multiplier);
+            const bonus = Math.floor(rawBonus / 100) * 100;
             if (bonus > 0) {
                 this.score += bonus;
                 this.scoreTexts.push(new ScoreText(GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2, ["TIME BONUS", bonus.toLocaleString()], "#0FF"));

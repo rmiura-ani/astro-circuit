@@ -13,7 +13,7 @@
  */
 class SystemController {
     constructor() {
-        this.VERSION = "0.45";
+        this.VERSION = "0.46";
         this.canvas = document.getElementById('game-canvas');
 
         // URLパラメータの解析（GitHub上の別ブランチやタグをテストするため）
@@ -82,7 +82,8 @@ class SystemController {
         try {
             // 各種アセット読み込み
             this.audio.initAudio();
-            await Promise.all([this.audio.preloadAll(), this.assets.loadImages()]);
+            await Promise.all([this.audio.preloadAll()]);
+            await this.assets.preload(['player.webp']);
 
             // ハイスコア（ストレージから呼び出して表示）
             const loadHighScore = this.highScore;
@@ -99,26 +100,37 @@ class SystemController {
         }
     }
 
-    /** ステージリソースのオンデマンド・ロード */
+    /** ステージリソースのオンデマンド・ロード（SystemController.js） */
     async loadStageAssets(stageNum) {
         const fileName = `stage-${stageNum}/scenario.yaml`;
         const scenarioPath = `${this.assetBase}${fileName}`;
-        const scenarioName = this.isLocal ? 'LOCAL' : this.branch.toUpperCase();
 
         try {
-            // 1. シナリオYAMLの読み込みとパース
-            const loadSuccess = await this.ScenarioManager.loadScenario(scenarioPath, scenarioName);
+            // 1. シナリオYAMLのロード
+            const loadSuccess = await this.ScenarioManager.loadScenario(scenarioPath, `STAGE_${stageNum}`);
             if (!loadSuccess) throw new Error("Scenario YAML load returned false.");
 
-            // 2. YAMLに書かれていたBGMファイル名を取得して、オンデマンドでロードする
+            // 2. 【ここを追加！】YAMLに記述されている敵の画像名を動的に集めてプリロード
+            // YAML内の全エネミーから type を抽出し、画像ファイル名にマッピング
+            const enemyTypes = this.ScenarioManager.scenario.map(e => e.type);
+            const uniqueTypes = [...new Set(enemyTypes)]; // 重複を排除
+
+            const imagesToPreload = uniqueTypes.map(type => {
+                if (type.startsWith('boss')) return `enemy_${type}.webp`; // boss_01 -> enemy_boss_01.webp
+                return `enemy_${type}.webp`; // straight -> enemy_straight.webp
+            });
+
+            // 割り出した画像をステージ開始前に一斉に裏でロード（終わるまで待つ）
+            if (imagesToPreload.length > 0) {
+                console.log(`[System] Preloading stage enemies:`, imagesToPreload);
+                await this.assets.preload(imagesToPreload);
+            }
+
+            // 3. BGMのロード
             const targetBGM = this.ScenarioManager.bgm;
             if (targetBGM) {
                 await this.audio.loadStageBGM(targetBGM);
             }            
-
-            // 3. ステージ固有の追加アセットがあればここでロード
-            // (例: ステージごとの背景画像など)
-            // await this.assets.loadStageSpecificImages(stageNum);
 
             return true;
         } catch (error) {
@@ -126,7 +138,7 @@ class SystemController {
             this.setStartMessage("❌ ERROR: Failed to Load Assets", "#F44");
             return false;
         }
-    }    
+    }  
 
     /** イベントリスナー セットアップ */
     setupGlobalEvents() {
@@ -147,6 +159,12 @@ class SystemController {
                 this.config.open();
             }
             if (['Space', 'KeyZ'].includes(e.code)) this.handleProceed('KEYBOARD');
+             if (this.config && this.config.isInvincibleCheat) {
+                const keyNum = parseInt(e.key, 10);
+                if (keyNum >= 1 && keyNum <= 7) {
+                    this.handleProceed('KEYBOARD', keyNum);
+                }
+            }1
         });
 
         const credits = document.getElementById('credit-screen');
@@ -158,7 +176,7 @@ class SystemController {
     }
 
     /** 実行ハンドラ */
-    handleProceed(type) {
+    handleProceed(type, stage = 1) {
         if (this.config.isMode || (this.game && this.game.isRunning)) return;
         if (this.isShowingCredits) return this.backToTitle();
         
@@ -167,7 +185,7 @@ class SystemController {
 
         this.stopIdleTimer();
         if (!this.game) this.game = new Game(this);
-        this.game.start(type === 'MOUSE' ? 'MOUSE' : 'KEYBOARD');
+        this.game.start(type === 'MOUSE' ? 'MOUSE' : 'KEYBOARD', stage);
     }
 
     // --- 画面遷移系 ---

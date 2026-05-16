@@ -167,17 +167,21 @@ class ScenarioManager {
         const hp = data.hp || 1;
         const x = data.x ?? Math.random() * game.width;
         const y = data.y ?? -32; // 基本は画面外上部
+        
+        // ボス専用パラメータの自動逆算ロジック
         let timeLimit = data.timeLimit;
         let timeMultiplier = data.timeMultiplier;
-        if (data.type.includes('boss')) {
+        if (data.type && data.type.includes('boss')) {
             const minTime = (hp / 2) * 8; 
-            if (!timeLimit) timeLimit = Math.floor(minTime * 4);
+            if (!timeLimit) timeLimit = Math.floor(minTime * 4); // 最速の4倍を制限時間に
             if (!timeMultiplier) timeMultiplier = Math.floor(hp * 3.33); 
         }
 
+        // 重複生成防止
         if (data.spawned) return;
 
         let enemy;
+        
         // 敵タイプに応じたクラス生成
         switch (data.type) {
             case 'sine':
@@ -194,16 +198,44 @@ class ScenarioManager {
                 );
                 break;
 
+            // --- 🚨 【新規ザコ追加】個性豊かなメンバーたち ---
+            case 'assault':
+                enemy = new AssaultEnemy(game, x, y, bType);
+                break;
+
+            case 'hunter':
+                enemy = new HunterEnemy(game, x, y, bType);
+                break;
+
+            case 'shield':
+                enemy = new ShieldEnemy(game, x, y, bType);
+                break;
+
+            case 'scout':
+                // YAML側から左右のスタート方向(isLeft)を指定可能に。デフォルトはtrue(左から右)
+                const isLeftToRight = data.isLeft !== undefined ? data.isLeft : true;
+                enemy = new ScoutEnemy(game, x, y, bType, isLeftToRight);
+                break;
+
+            // --- 🚨 【ボス関連】共通処理をまとめつつ分岐 ---
             case 'boss_01':
                 enemy = new BossEnemy_01(game, x, y, hp, timeLimit, timeMultiplier);
-                game.startBossBattle();
-                data.spawned = true;
+                break;
+
+            case 'boss_02':
+                enemy = new BossEnemy_02(game, x, y, hp, timeLimit, timeMultiplier);
                 break;
 
             case 'straight':
             default:
                 enemy = new StraightEnemy(game, x, y, bType, hp);
                 break;
+        }
+
+        // 🚨 ボス系エンティティが生成された場合の共通演出トリガー
+        if (data.type && data.type.includes('boss')) {
+            game.startBossBattle(); // スクロール停止、警告演出、タイムボーナスカウント開始
+            data.spawned = true;    // 無限ループ時でもボス自体が何匹も湧かないようにガード
         }
 
         // 難易度と個別パラメータの適用
@@ -407,44 +439,67 @@ class ScoreText {
 }
 
 /**
- * ScenarioManager 敵キャラ画像管理
+ * AssetManager: 画像アセットの完全動的オンデマンドロード管理
  */
 class AssetManager {
     constructor(basePath) {
         this.basePath = basePath;
-        this.imageCache = {};
+        this.imageCache = {};      // ロード完了した Image オブジェクトのキャッシュ
+        this.loadingPromises = {}; // 二重ロードを防ぐための、現在ロード中のPromise
     }
 
-    async loadImages() {
-        const imagesToLoad = {
-            'player.webp': this.basePath + 'player.webp',
-            'enemy_straight.webp': this.basePath + 'enemy_straight.webp',
-            'enemy_sine.webp': this.basePath + 'enemy_sine.webp',
-            'enemy_stationary.webp': this.basePath + 'enemy_stationary.webp',
-            'enemy_boss_01.webp': this.basePath + 'enemy_boss_01.webp'
-        };
-
-        const loadImg = (key, url) => new Promise(r => {
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.onload = () => {
-                this.imageCache[key] = img;
-                r(img);
-            };
-            img.onerror = () => {
-                console.error(`Image load failed: ${url}`);
-                r(null);
-            };
-            img.src = url;
-        });
-
-        await Promise.all(
-            Object.entries(imagesToLoad).map(([key, url]) => loadImg(key, url))
-        );
-        console.log("[Assets] All images preloaded.");
-    }
-
+    /**
+     * 【大改修】画像をオンデマンドで取得・ロードする
+     * @param {string} key 画像のファイル名 (例: 'enemy_assault.webp')
+     * @returns {HTMLImageElement|null} ロード済みの画像。まだロード中ならnullか仮の画像を返す
+     */
     get(key) {
-        return this.imageCache[key];
+        if (!key) return null;
+
+        // 1. すでにキャッシュにある場合は、それを即座に返す（毎フレームの描画処理用）
+        if (this.imageCache[key]) {
+            return this.imageCache[key];
+        }
+
+        // 2. まだロードが始まっていない初見の画像の場合、非同期ロードを裏で開始する
+        if (!this.loadingPromises[key]) {
+            const url = `${this.basePath}${key}`;
+            console.log(`[Assets] 📦 On-demand loading started: ${url}`);
+
+            this.loadingPromises[key] = new Promise(resolve => {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = () => {
+                    this.imageCache[key] = img; // キャッシュに格納
+                    console.log(`[Assets]  Ready: ${key}`);
+                    resolve(img);
+                };
+                img.onerror = () => {
+                    console.error(`[Assets] ❌ Load failed: ${url}`);
+                    // エラー時は二重ロード防止を解除し、次回リトライ可能にする
+                    this.loadingPromises[key] = null;
+                    resolve(null);
+                };
+                img.src = url;
+            });
+        }
+
+        // 3. ロード中の場合は、一瞬だけ null が返る（ゲームループは止まらない）
+        // ※ 完全にロードされるまでの数フレーム間、透明になるか白丸で代用されます
+        return null; 
+    }
+
+    /**
+     * 自機など、ゲーム開始時に「絶対に最初から画面にいないと困るもの」だけを
+     * 事前にロードしておきたい場合に使用するセーフティメソッド
+     * @param {string[]} keys プリロードしたいアセット名の配列
+     */
+    async preload(keys) {
+        // すべてを get() に丸投げして、そのロード完了を待つ
+        await Promise.all(keys.map(key => {
+            this.get(key);
+            return this.loadingPromises[key] || Promise.resolve();
+        }));
+        console.log("[Assets] Core images preloaded.");
     }
 }
