@@ -1,0 +1,64 @@
+# PROJECT: VOID-CIRCUIT | Stage 1 Scenario
+# BGM Length: 6900F (01:55) | Boss Entrance: 5400F (01:30)
+# --------------------------------------------------
+
+version: 0.2
+name: "STAGE 1"
+
+enemies:
+  # 00:01- 基本操作確認用のストレート敵編隊
+  - { frame: 60,  x: 60,  type: "straight", hp: 1, bulletType: "straight" }
+  - { frame: 75,  x: 100, type: "straight", hp: 1, bulletType: "straight" }
+  - { frame: 90,  x: 140, type: "straight", hp: 1, bulletType: "straight" }
+  - { frame: 105, x: 180, type: "straight", hp: 1, bulletType: "straight" }
+  - { frame: 120, x: 220, type: "straight", hp: 1, bulletType: "straight" }
+  - { frame: 135, x: 260, type: "straight", hp: 1, bulletType: "straight" }
+
+  # 00:04- 左右から出現する設置型敵（8方向弾）
+  - { frame: 250, x: 80,  type: "stationary", hp: 3, bulletType: "eight-way", stopY: 100, waitTime: 120 }
+  - { frame: 250, x: 240, type: "stationary", hp: 3, bulletType: "eight-way", stopY: 100, waitTime: 120 }
+
+  # 00:06- 狙い撃ち弾を撃ちながら蛇行するサイン波編隊
+  - { frame: 400, x: 40,  type: "sine", hp: 1, phase: 0,   amplitude: 50, bulletType: "aim" }
+  - { frame: 420, x: 80,  type: "sine", hp: 1, phase: 0.5, amplitude: 50, bulletType: "aim" }
+  - { frame: 440, x: 120, type: "sine", hp: 1, phase: 1.0, amplitude: 50, bulletType: "aim" }
+
+  # 00:13- 画面中央で長く居座る高耐久の設置型敵
+  - { frame: 800, x: 160, type: "stationary", hp: 5, bulletType: "eight-way", stopY: 120, waitTime: 200 }
+
+  # 00:20- 画面を横断する大きなサイン波（3WAY弾）
+  - { frame: 1200, x: 160, type: "sine", hp: 2, phase: 0,    amplitude: 140, bulletType: "triple" }
+  - { frame: 1230, x: 160, type: "sine", hp: 2, phase: 3.14, amplitude: 140, bulletType: "triple" }
+
+  # 00:31- 画面下部まで進出してくるプレッシャー配置
+  - { frame: 1900, x: 160, type: "stationary", hp: 5, bulletType: "eight-way", stopY: 150, waitTime: 300 }
+
+  # 00:38- 上部左右でクロス攻撃を仕掛ける同時設置
+  - { frame: 2300, x: 80,  type: "stationary", hp: 5, bulletType: "eight-way", stopY: 70, waitTime: 200 }
+  - { frame: 2300, x: 240, type: "stationary", hp: 5, bulletType: "eight-way", stopY: 70, waitTime: 200 }
+
+  # 00:46- BGM中盤の激しさに合わせた高耐久ターゲット
+  - { frame: 2800, x: 160, type: "stationary", hp: 8, bulletType: "eight-way", stopY: 100, waitTime: 400 }
+
+  # 00:55- クライマックス前のラッシュ（10機編隊相当の耐久）
+  - { frame: 3300, x: 160, type: "stationary", hp: 10, bulletType: "eight-way", stopY: 80, waitTime: 500 }
+  - { frame: 3700, x: 40,  type: "stationary", hp: 5, bulletType: "triple", stopY: 120, waitTime: 300 }
+  - { frame: 3700, x: 280, type: "stationary", hp: 5, bulletType: "triple", stopY: 120, waitTime: 300 }
+
+  # 01:06- ボス直前の激しいサイン波弾幕攻撃
+  - { frame: 4000, x: 160, type: "sine", hp: 4, phase: 0, amplitude: 150, bulletType: "eight-way" }
+
+  # 01:13- ボス登場前の最終防衛ライン
+  - { frame: 4400, x: 80,  type: "stationary", hp: 6, bulletType: "aim", stopY: 100, waitTime: 400 }
+  - { frame: 4800, x: 160, type: "straight", hp: 3, bulletType: "triple" }
+
+  # 01:30- Boss Battle Stage 1: サビの終わりに向けて激突
+  - { frame: 5400, x: 128, type: "boss_01", hp: 150 }
+
+  # 01:33- ボス戦を彩る無限湧き増援（狙い撃ちとサイン波）
+  - { frame: 5600, x: 40,  type: "stationary", hp: 5, bulletType: "aim", stopY: 60, waitTime: 150 }
+  - { frame: 5600, x: 280, type: "stationary", hp: 5, bulletType: "aim", stopY: 60, waitTime: 150 }
+  - { frame: 6000, x: 160, type: "sine", hp: 6, phase: 0, amplitude: 120, bulletType: "eight-way" }
+
+  # ボス生存時ループ：1分30秒地点の増援開始へ戻る
+  - { frame: 6400, type: "LOOP_END", returnTo: 5450 }

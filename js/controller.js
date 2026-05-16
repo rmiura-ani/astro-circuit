@@ -13,7 +13,7 @@
  */
 class SystemController {
     constructor() {
-        this.VERSION = "0.42";
+        this.VERSION = "0.43";
         this.canvas = document.getElementById('game-canvas');
 
         // ブランチ名 or タグ名　をもとに assetBase を決定
@@ -63,7 +63,7 @@ class SystemController {
             this.audio.initAudio();
             await Promise.all([this.audio.preloadAll(), this.assets.loadImages()]);
             const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
-            const scenarioPath = isLocal ? './scenario.json' : this.assetBase + 'scenario.json';
+            const scenarioPath = isLocal ? './scenario.yaml' : this.assetBase + 'scenario.yaml';
             const scenarioName = isLocal ? 'LOCAL' : this.branch.toUpperCase();
             this.enemyManager.loadScenario(scenarioPath, scenarioName);
 

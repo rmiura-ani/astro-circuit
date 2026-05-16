@@ -18,8 +18,8 @@ class Game {
         this.enemyManager = controller.enemyManager;
         this.canvas = controller.canvas;
         this.ctx = this.canvas.getContext('2d');
-        this.width = 320;
-        this.height = 480;
+        this.width = GAME_CONFIG.WIDTH;
+        this.height = GAME_CONFIG.HEIGHT;
 
         this.stars = new Starfield(this.width, this.height);
         
@@ -38,6 +38,8 @@ class Game {
         this.isBossActive = false;
         this.bossStartTime = 0;
         this.gameOverTimer = 0;
+        this.isVictorySequence = false;
+        this.victoryTimer = 0;
         this.clearTimer = 0;
         this.escCount = 0;
         this.escTimer = null;
@@ -263,18 +265,40 @@ class Game {
         });
     }
 
-    /** デバッグ用フレーム・シナリオ表示 */
+    /** デバッグ用表示の更新 */
     updateDebugInfo() {
         const debugEl = document.getElementById('debug-info');
-        if (this.isInvincibleCheat) {
-            debugEl.style.display = 'block';
-            document.getElementById('debug-frame').innerText = this.frame;
-            document.getElementById('debug-index').innerText = `${this.enemyManager.currentIndex} / ${this.enemyManager.scenario.length}`;
-            const loadEl = document.getElementById('debug-load');
-            if (loadEl) loadEl.innerText = this.entities.length + this.particles.length;
-        } else {
-            debugEl.style.display = 'none';
+        if (!debugEl || !this.isInvincibleCheat) {
+            if (debugEl) debugEl.style.display = 'none';
+            return;
         }
+
+        debugEl.style.display = 'block';
+        document.getElementById('debug-frame').innerText = this.frame;
+        document.getElementById('debug-scn-frame').innerText = this.enemyManager.currentScenarioFrame;
+        document.getElementById('debug-index').innerText = `${this.enemyManager.currentIndex} / ${this.enemyManager.scenario.length}`;
+
+        // --- タイムボーナス残量の計算 ---
+        const bonusEl = document.getElementById('debug-bonus-time');
+        // 画面内にボスが存在するかチェック（クラス名やフラグで判定）
+        const boss = this.entities.find(e => e.isBoss); 
+        
+        if (boss && this.bossStartTime > 0) {
+            const elapsed = this.frame - this.bossStartTime;
+            const remaining = Math.max(0, boss.timeLimit - elapsed);
+            const seconds = (remaining / GAME_CONFIG.FPS).toFixed(2); // 秒単位に変換
+            
+            bonusEl.innerText = `${remaining}F (${seconds}s)`;
+            
+            // 残りわずかになったら赤くする演出デバッグ
+            bonusEl.style.color = remaining < 600 ? "#f00" : "#0ff"; 
+        } else {
+            bonusEl.innerText = "---";
+            bonusEl.style.color = "#888";
+        }
+
+        const loadEl = document.getElementById('debug-load');
+        if (loadEl) loadEl.innerText = this.entities.length + this.particles.length;
     }
 
     /** キーボードかマウスかどちらで遊んでいるかを記録 */
@@ -347,7 +371,11 @@ class Game {
                         if (typeof enemy.onDie === 'function') {
                             enemy.onDie(this);            // 撃破演出
                         }
-                        
+                        if (enemy.isBoss){
+                            this.enemyManager.skipToAfterLoop();
+                            this.isVictorySequence = true;
+                            this.victoryTimer = 210;
+                        }                        
                     } else {
                         // --- 敵に弾が当たったが、まだ生きている時の処理 ---
                         const amount = 10;
@@ -495,7 +523,7 @@ class Game {
         if (!this.player.alive && this.currentLives <= 0) {
             this.gameOverTimer++;
             this.ctx.fillStyle = 'rgba(255,0,0,0.5)';
-            this.ctx.fillRect(0, 180, 320, 100);
+            this.ctx.fillRect(0, 180, GAME_CONFIG.WITDH, 100);
             this.ctx.fillStyle = '#FFF';
             this.ctx.fillText('GAME OVER', 160, 230);
             if (this.gameOverTimer > 180) this.endSession("GAME OVER");

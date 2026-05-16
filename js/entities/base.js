@@ -8,54 +8,17 @@
  * Note: Included assets are the property of their respective owners.
  */
 
-class AssetManager {
-    constructor(basePath) {
-        this.basePath = basePath;
-        this.imageCache = {};
-    }
-
-    async loadImages() {
-        const imagesToLoad = {
-            'player.webp': this.basePath + 'player.webp',
-            'enemy_straight.webp': this.basePath + 'enemy_straight.webp',
-            'enemy_sine.webp': this.basePath + 'enemy_sine.webp',
-            'enemy_stationary.webp': this.basePath + 'enemy_stationary.webp',
-            'enemy_boss_01.webp': this.basePath + 'enemy_boss_01.webp'
-        };
-
-        const loadImg = (key, url) => new Promise(r => {
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.onload = () => {
-                this.imageCache[key] = img;
-                r(img);
-            };
-            img.onerror = () => {
-                console.error(`Image load failed: ${url}`);
-                r(null);
-            };
-            img.src = url;
-        });
-
-        await Promise.all(
-            Object.entries(imagesToLoad).map(([key, url]) => loadImg(key, url))
-        );
-        console.log("[Assets] All images preloaded.");
-    }
-
-    get(key) {
-        return this.imageCache[key];
-    }
-}
-
+/**
+ * EnemyManager 敵キャラシナリオ管理
+ */
 class EnemyManager {
     constructor() {
-        this.REQUIRED_VERSION = 0.1;
+        this.REQUIRED_VERSION = 0.2;
         this.scenario = [];
         this.currentIndex = 0;
+        this.currentScenarioFrame = 0;
         this.isFinished = false;
         
-        // 難易度によるグローバル倍率
         this.speedMultiplier = 1.0;
         this.fireRateMultiplier = 1.0;
         
@@ -63,53 +26,70 @@ class EnemyManager {
         this.scenarioName = "UNKNOWN";
     }
 
-    /**
-     * JSONシナリオファイルをロード
-     */
+    /** YAMLシナリオファイルをロード */
     async loadScenario(path, scenarioName) {
         try {
             const res = await fetch(path);
-            if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);            
-            const data = await res.json();
+            if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
             
+            // JSONではなくtextとして取得
+            const yamlText = await res.text();
+            
+            // js-yamlでオブジェクト化
+            const data = jsyaml.load(yamlText);
+            
+            if (!data) throw new Error("YAML parse failed or empty.");
+
             // バージョンチェック
             this.version = data.version || "0.1";
             if (parseFloat(this.version) < this.REQUIRED_VERSION) {
-                console.error(`[Warning] Scenario v${this.version} is outdated.`);
+                console.warn(`[Warning] Scenario v${this.version} is outdated.`);
             }
             
-            // フレーム順にソート（データがバラバラでも動くように）
-            this.scenario = (data.enemies || data || []).sort((a, b) => a.frame - b.frame);
+            // 敵データの抽出とソート
+            // data.enemies があればそれを、なければデータ自体を配列として扱う
+            const rawEnemies = Array.isArray(data.enemies) ? data.enemies : (Array.isArray(data) ? data : []);
+            this.scenario = rawEnemies.sort((a, b) => a.frame - b.frame);
             
             this.scenarioName = scenarioName;
 
             this.reset();
-            console.log(`[System] Scenario "${path}" loaded.`);
+            console.log(`[System] YAML Scenario "${path}" loaded. (${this.scenario.length} events)`);
         } catch (e) {
             console.error("[System] Scenario Load Failed:", e);
         }
     }
 
-    /**
-     * 難易度設定の適用
-     */
+    /** 難易度設定の適用 */
     setDifficulty(params) {
         this.speedMultiplier = params.enemySpeed || 1.0;
         this.fireRateMultiplier = params.fireRate || 1.0;
     }
 
-    /**
-     * 毎フレームの更新処理
-     */
-    update(frame, game) {
+    update(gameFrame, game) {
         if (this.isFinished || this.scenario.length === 0) return;
 
-        // 指定フレームに到達した敵をすべて生成
+        // シナリオ内フレームを進める
+        this.currentScenarioFrame++;
+
+        // 現在のインデックスから、指定フレームに到達したイベントを処理
         while (
             this.currentIndex < this.scenario.length && 
-            this.scenario[this.currentIndex].frame <= frame
+            this.scenario[this.currentIndex].frame <= this.currentScenarioFrame
         ) {
-            this.spawnEnemy(this.scenario[this.currentIndex], game);
+            const data = this.scenario[this.currentIndex];
+
+            // 特殊イベント「LOOP_END」の判定
+            if (data.type === 'LOOP_END') {
+                // ループ実行：フレームとインデックスを戻す
+                this.currentScenarioFrame = data.returnTo || 0;
+                this.currentIndex = this.findStartIndexForFrame(this.currentScenarioFrame);
+                console.log(`[System] Scenario looping back to frame: ${this.currentScenarioFrame}`);
+                continue; // 巻き戻した後の最初の敵を即座に判定するためにループ継続
+            }
+
+            // 通常の敵生成
+            this.spawnEnemy(data, game);
             this.currentIndex++;
         }
 
@@ -118,19 +98,56 @@ class EnemyManager {
         }
     }
 
-    /**
-     * 敵インスタンスの動的生成
-     */
+    /** 指定フレームまで巻き戻した際の、最適な currentIndex を探す */
+    findStartIndexForFrame(targetFrame) {
+        let index = 0;
+        while (index < this.scenario.length && this.scenario[index].frame < targetFrame) {
+            index++;
+        }
+        return index;
+    }
+
+    /** 現在のインデックスから先に向かって、最初の LOOP_END を探す */
+    skipToAfterLoop() {
+        for (let i = this.currentIndex; i < this.scenario.length; i++) {
+            if (this.scenario[i].type === 'LOOP_END') {
+                // LOOP_END の次のイベントまでインデックスを飛ばす
+                this.currentIndex = i + 1;
+                
+                // シナリオ内の内部時計も、その LOOP_END のフレームまで進める
+                this.currentScenarioFrame = this.scenario[i].frame;
+                
+                console.log(`[System] Boss defeated! Skipped to scenario frame: ${this.currentScenarioFrame}`);
+                return;
+            }
+        }
+    } 
+
+    /** リセット */
+    reset() {
+        this.currentIndex = 0;
+        this.currentScenarioFrame = 0; // リセット時も0に
+        this.isFinished = false;
+        this.scenario.forEach(s => s.spawned = false);
+    }
+
+    /** 敵インスタンスの動的生成 */
     spawnEnemy(data, game) {
         const bType = data.bulletType || 'aim';
         const hp = data.hp || 1;
         const x = data.x ?? Math.random() * game.width;
         const y = data.y ?? -32; // 基本は画面外上部
-        const timeLimit = data.timeLimit || 0;
-        const timeMultiplier =  data.timeMultiplier || 0;
+        let timeLimit = data.timeLimit;
+        let timeMultiplier = data.timeMultiplier;
+        if (data.type.includes('boss')) {
+            const minTime = (hp / 2) * 8; 
+            if (!timeLimit) timeLimit = Math.floor(minTime * 4);
+            if (!timeMultiplier) timeMultiplier = Math.floor(hp * 3.33); 
+        }
+
+        if (data.spawned) return;
 
         let enemy;
-
         // 敵タイプに応じたクラス生成
         switch (data.type) {
             case 'sine':
@@ -150,6 +167,7 @@ class EnemyManager {
             case 'boss_01':
                 enemy = new BossEnemy_01(game, x, y, hp, timeLimit, timeMultiplier);
                 game.startBossBattle();
+                data.spawned = true;
                 break;
 
             case 'straight':
@@ -178,11 +196,6 @@ class EnemyManager {
 
         // 射撃レート
         enemy.fireRateMultiplier = this.fireRateMultiplier;
-    }
-
-    reset() {
-        this.currentIndex = 0;
-        this.isFinished = false;
     }
 }
 
@@ -352,5 +365,48 @@ class ScoreText {
         });
 
         ctx.restore();
+    }
+}
+
+/**
+ * EnemyManager 敵キャラ画像管理
+ */
+class AssetManager {
+    constructor(basePath) {
+        this.basePath = basePath;
+        this.imageCache = {};
+    }
+
+    async loadImages() {
+        const imagesToLoad = {
+            'player.webp': this.basePath + 'player.webp',
+            'enemy_straight.webp': this.basePath + 'enemy_straight.webp',
+            'enemy_sine.webp': this.basePath + 'enemy_sine.webp',
+            'enemy_stationary.webp': this.basePath + 'enemy_stationary.webp',
+            'enemy_boss_01.webp': this.basePath + 'enemy_boss_01.webp'
+        };
+
+        const loadImg = (key, url) => new Promise(r => {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = () => {
+                this.imageCache[key] = img;
+                r(img);
+            };
+            img.onerror = () => {
+                console.error(`Image load failed: ${url}`);
+                r(null);
+            };
+            img.src = url;
+        });
+
+        await Promise.all(
+            Object.entries(imagesToLoad).map(([key, url]) => loadImg(key, url))
+        );
+        console.log("[Assets] All images preloaded.");
+    }
+
+    get(key) {
+        return this.imageCache[key];
     }
 }

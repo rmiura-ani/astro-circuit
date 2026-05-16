@@ -126,8 +126,11 @@ gtag('config', 'G-KJJQ5E61FL');
             <div id="weapon-hint"></div>
         </div>
         <div id="debug-info" style="display: none;">
-            FRAME: <span id="debug-frame">0</span><br>
-            NEXT ENEMY ID: <span id="debug-index">0</span>
+            GAME FRM: <span id="debug-frame">0</span><br>
+            SCN  FRM: <span id="debug-scn-frame">0</span><br>
+            INDEX   : <span id="debug-index">0</span><br>
+            BONUS RM: <span id="debug-bonus-time">---</span><br>
+            ENTITIES: <span id="debug-load">0</span>
         </div>
     </div>
 
@@ -174,6 +177,7 @@ gtag('config', 'G-KJJQ5E61FL');
     </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
 <script src="js/systems.js"></script>
 <script src="js/controller.js"></script>
 <script src="js/utils.js"></script>
@@ -185,6 +189,7 @@ gtag('config', 'G-KJJQ5E61FL');
 
 <script src="js/config.js"></script>
 <script src="js/ga.js"></script>
+<script src="js/constants.js"></script>
 <script src="js/game.js"></script>
 
 </body>
