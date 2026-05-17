@@ -39,7 +39,6 @@ class ScenarioManager {
             // メタデータの抽出
             this.stageName = data.name || "Unknown Stage";
             this.bgm = data.bgm || "";
-            this.bgColor = data.bgColor || "#000000";
 
             // 敵データの抽出とソート
             // data.enemies があればそれを、なければデータ自体を配列として扱う
@@ -103,7 +102,7 @@ class ScenarioManager {
             if (data.type === 'LOOP_END') {
                 // ループ実行：フレームとインデックスを戻す
                 this.currentScenarioFrame = data.returnTo || 0;
-                this.currentIndex = this.findStartIndexForFrame(this.currentScenarioFrame);
+                this.currentIndex = this._findStartIndexForFrame(this.currentScenarioFrame);
                 console.log(`[System] Scenario looping back to frame: ${this.currentScenarioFrame}`);
                 continue; // 巻き戻した後の最初の敵を即座に判定するためにループ継続
             }
@@ -119,7 +118,7 @@ class ScenarioManager {
     }
 
     /** 指定フレームまで巻き戻した際の、最適な currentIndex を探す */
-    findStartIndexForFrame(targetFrame) {
+    _findStartIndexForFrame(targetFrame) {
         let index = 0;
         while (index < this.scenario.length && this.scenario[index].frame < targetFrame) {
             index++;
@@ -148,7 +147,6 @@ class ScenarioManager {
         this.scenario = [];
         this.stageName = "";
         this.bgm = "";
-        this.bgColor = "#000000";
         this.scenarioName = "UNKNOWN";
 
         this.currentIndex = 0;

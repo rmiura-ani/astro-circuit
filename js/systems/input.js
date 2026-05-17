@@ -30,7 +30,15 @@ class InputManager {
 
         const updatePos = (e) => this._handleCoordinate(e);
 
-        // マウス
+        this.isCanvasOutClicked = false;
+        window.addEventListener('mousedown', (e) => {
+            if (e.target !== this.canvas) {
+                if (document.getElementById('start-screen')?.contains(e.target)) return;
+                this.isCanvasOutClicked = true;
+            }
+        });
+
+        // マウス (canvas内)
         this.canvas.addEventListener('mousedown', (e) => { this.isTouching = true; updatePos(e); });
         window.addEventListener('mousemove', (e) => { if (this.isTouching) updatePos(e); });
         window.addEventListener('mouseup', () => { this.isTouching = false; });
@@ -49,6 +57,12 @@ class InputManager {
         }, touchOptions);
 
         this.canvas.addEventListener('touchend', () => { this.isTouching = false; });
+    }
+
+    getAndResetCanvasOutClick() {
+        const clicked = this.isCanvasOutClicked;
+        this.isCanvasOutClicked = false;
+        return clicked;
     }
 
     _handleCoordinate(e) {

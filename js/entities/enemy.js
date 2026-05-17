@@ -442,12 +442,12 @@ class BossEnemy_01 extends BossEnemy {
         }
     }
 
-    draw(ctx) {
+    draw(ctx, isInvincibleCheat = false) {
         ctx.save();
         if (this.state === 'ATTACK_02') {
             ctx.filter = 'hue-rotate(150deg) saturate(2) brightness(1.2)';
         }
-        super.draw(ctx);
+        super.draw(ctx, isInvincibleCheat);
         ctx.restore(); 
     }
 
@@ -546,7 +546,7 @@ class BossEnemy_02 extends BossEnemy {
         }
     }
 
-    draw(ctx) {
+    draw(ctx, isInvincibleCheat = false) {
         ctx.save();
         // 潜航深度に合わせたアルファ値の適用、およびエフェクト
         ctx.globalAlpha = this.alpha;
@@ -554,7 +554,7 @@ class BossEnemy_02 extends BossEnemy {
             // 潜っている間は青くブレさせ、潜航中であることを表現
             ctx.filter = 'blur(3px) brightness(0.6) saturate(0.5) hue-rotate(200deg)';
         }
-        super.draw(ctx);
+        super.draw(ctx, isInvincibleCheat);
         ctx.restore();
     }
 

@@ -3,7 +3,7 @@
  *
  * game.js
  * 
- * Copyright (c) 2026 あに。部長 / Ryo Miura
+* Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
@@ -25,7 +25,6 @@ class Game {
         // 内部状態
         this._score = 0;
         this._lives = controller.config.lives;
-        this._weaponMode = 'STRAIGHT';
 
         this.isRunning = false;
 
@@ -83,29 +82,12 @@ class Game {
         el.innerText = count === 0 ? "" : (count <= 3 ? icon.repeat(count) : `${icon}x${count}`);
     }
 
-    // --- 武器制御 ---
-    set weaponMode(val) {
-        this._weaponMode = val;
-        this.updateWeaponUI();
-    }
-    get weaponMode() { return this._weaponMode; }
-
-    updateWeaponUI() {
-        const displayEl = document.getElementById('weapon-display');
-        const hintEl = document.getElementById('weapon-hint');
-        if (displayEl) {
-            displayEl.innerText = `WEAPON: ${this.weaponMode}`;
-            displayEl.className = (this.weaponMode === 'WIDE') ? 'mode-wide' : '';
-        }
-        if (hintEl) hintEl.innerText = '[X]Key OR TAP SIDE-UI TO CHANGE';
-    }
 
     // --- ゲームフロー ---
     /** 初期化 */
     reset() {
         this._score = 0;
         this._lives = this.sc.config.lives;
-        this._weaponMode = 'STRAIGHT';
         this.stats = { enemiesSpawned: 0, enemiesKilled: 0, shotsFired: 0, shotsHit: 0 };
         this.isInvincibleCheat = this.sc.config.isInvincibleCheat;
 
@@ -137,7 +119,7 @@ class Game {
         this.entities = [];
         this.particles = [];
         this.scoreTexts = [];
-        this.player = new Player(this, GAME_CONFIG.WIDTH / 2 - 16, GAME_CONFIG.HEIGHT - 80);
+        this.player = new Player(this, this.sc.input, GAME_CONFIG.WIDTH / 2 - 16, GAME_CONFIG.HEIGHT - 80);
 
         this.ScenarioManager.reset();
         if (this.sc.audio) this.sc.audio.resetBGM();
@@ -189,7 +171,6 @@ class Game {
             this.background.setup(this.ScenarioManager.bgColor, stageNum); 
             if (this.sc.audio) this.sc.audio.playBGM(this.ScenarioManager.bgm);
             
-            // セッションレコードの更新
             if (this.sessionRecord) {
                 this.sessionRecord.missionName = this.ScenarioManager.scenarioName;
             }
@@ -202,15 +183,12 @@ class Game {
     /** キー入力 */
     handleKeyDown(e) {
         if (!this.isRunning) return;
-        if (e.code === 'KeyX') this.toggleWeapon();
         if (e.key === 'Escape') this.handleEmergencyEscape();
     }
 
     /** マウス入力 */
     handleMouseDown(e) {
-        if (this.isRunning && this.player?.alive && e.target !== this.canvas) {
-            this.toggleWeapon();
-        }
+        // 必要に応じて、サイドUIクリック時の換装ロジックをPlayer側に直接叩かせるためここは空に
     }
 
     /** ESC連打でゲーム終了 */
@@ -246,20 +224,25 @@ class Game {
         setTimeout(() => { container.style.filter = ""; }, 150);
     }
 
-    /** 表示更新 */
+    /** メインループ表示更新 */
     update() {
         this.background.update(this.frame);
         if (!this.isRunning) return;
 
         this.frame++;
-        this.player.update(this.sc.input, GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT);
+        this.player.update(GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT);
         this.ScenarioManager.update(this.frame, this);
 
         if (this.player.alive) {
-            this.handlePlayerShooting();
             this.checkCollisions();
             this.checkClearCondition();
             this.updateInputMode();
+            
+            // 💡 スコアかすり・撃ち込み得点の同期（ショットキー押下状態をPlayerのプロパティから取得）
+            const isFiring = this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isTouching;
+            if (this.frame % 5 === 0 && !this.isBossActive) {
+                this.score += isFiring ? 20 : 30;   
+            }
         }
         
         if (!this.player.alive && this.currentLives > 0) {
@@ -315,7 +298,6 @@ class Game {
         if (dScnFrame) dScnFrame.innerText = this.ScenarioManager.currentScenarioFrame;
         if (dIndex) dIndex.innerText = `${this.ScenarioManager.currentIndex} / ${this.ScenarioManager.scenario.length}`;
 
-        // タイムボーナス残量の計算
         const bonusEl = document.getElementById('debug-bonus-time');
         const boss = this.entities.find(e => e.isBoss); 
         
@@ -341,36 +323,6 @@ class Game {
         const isKeyActive = (this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isPressed('ArrowUp'));
         if (this.sessionRecord.inputMode === 'KEYBOARD' && this.sc.input.isTouching) this.sessionRecord.inputMode = 'BOTH';
         else if (this.sessionRecord.inputMode === 'MOUSE' && isKeyActive) this.sessionRecord.inputMode = 'BOTH';
-    }
-
-    /** 武器選択 */
-    toggleWeapon() {
-        this.weaponMode = (this.weaponMode === 'STRAIGHT') ? 'WIDE' : 'STRAIGHT';
-        if (this.sc.audio) this.sc.audio.playChangeWp();
-    }
-
-    /** ショット */
-    handlePlayerShooting() {
-        const isFiring = this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isTouching;
-        if (isFiring) {
-            if (this.weaponMode === 'STRAIGHT') {
-                if (this.frame % 8 === 0) {
-                    this.entities.push(new Bullet(this.player.x + 8, this.player.y, 0));
-                    this.entities.push(new Bullet(this.player.x + 20, this.player.y, 0));
-                    this.stats.shotsFired += 2; 
-                    if (this.sc.audio) this.sc.audio.playShot();
-                }
-            } else {
-                if (this.frame % 12 === 0) {
-                    this.entities.push(new Bullet(this.player.x + 14, this.player.y, 0));
-                    this.entities.push(new Bullet(this.player.x + 14, this.player.y, -3.5));
-                    this.entities.push(new Bullet(this.player.x + 14, this.player.y, 3.5));
-                    this.stats.shotsFired += 3; 
-                    if (this.sc.audio) this.sc.audio.playShot();
-                }
-            }
-        }
-        if (this.player.alive && !this.isBossActive && this.frame % 5 === 0 ) this.score += isFiring ? 20 : 30;   
     }
 
     /** 衝突判定メイン */
@@ -410,12 +362,11 @@ class Game {
 
         // 敵の当たり判定（敵 vs 自機弾）
         for (const enemy of enemies) {
-            // 画面外（上部すぎ）の敵は判定をスキップ
             if (
-                enemy.y + enemy.height < 30 ||            // 🎯 上部30px（HUDエリア）より上なら判定をスキップ！
-                enemy.y >= GAME_CONFIG.HEIGHT ||          // 画面の下外
-                enemy.x + enemy.width <= 0 ||             // 画面の左外（スカウト機のハイド防止）
-                enemy.x >= GAME_CONFIG.WIDTH              // 画面の右外
+                enemy.y + enemy.height < 30 ||            
+                enemy.y >= GAME_CONFIG.HEIGHT ||          
+                enemy.x + enemy.width <= 0 ||             
+                enemy.x >= GAME_CONFIG.WIDTH              
             ) {
                 continue;
             }
@@ -449,7 +400,7 @@ class Game {
         }
     }
 
-    /** 円形判定のヘルパー（中心座標と半径の2乗で比較）*/
+    /** 円形判定のヘルパー */
     isCircleHit(px, py, radiusSq, target) {
         const tx = target.x + (target.width || 32) / 2;
         const ty = target.y + (target.height || 32) / 2;
@@ -474,7 +425,7 @@ class Game {
             Math.abs(r1cy - r2cy) < (h1 + h2) / 2;
     }
 
-    /** 得点追加（敵撃破） */
+    /** 得点追加 */
     calculateAttachScore(enemy){
         const maxHp = enemy.maxHp || 1;
         const amount = 100 * maxHp * (maxHp + 1);  
@@ -523,7 +474,7 @@ class Game {
         this.bossStartTime = this.frame;
     }
 
-    /** ステージクリア判定（爆発や得点演出の終了を待つ） */
+    /** ステージクリア判定 */
     checkClearCondition() {
         if (this.frame < 180) return;
 
@@ -533,23 +484,20 @@ class Game {
         if (isEnemyAllKilled && !this.isCleared) {
             this.postBossTimer++;
 
-            // クリアの成立条件：
-            // 条件A: 画面上の爆発エフェクトも、スコアテキストもすべて消え去って静寂が訪れた
-            // 条件B (セーフティ): 撃破から150フレーム（約2.5秒）が経過した
             const isEffectsFinished = (this.particles.length === 0 && this.scoreTexts.length === 0);
             const isTimeout = (this.postBossTimer >= 150);
 
             if (isEffectsFinished || isTimeout) {
                 this.isCleared = true;
-                this.clearTimer = 0; // ここからSTAGE CLEAR文字表示用のタイマーがスタート
-                if (this.sc.audio) this.sc.audio.fadeOutBGM(3000); // BGMフェードアウト開始
+                this.clearTimer = 0; 
+                if (this.sc.audio) this.sc.audio.fadeOutBGM(3000); 
                 console.log(`[System] All effects finished at frame ${this.postBossTimer}. Stage Cleared.`);
             }
         }
 
         if (this.isCleared) {
             this.clearTimer++;
-            if (this.clearTimer === 180) { // STAGE CLEAR表示から3秒後に次へ
+            if (this.clearTimer === 180) { 
                 this.goToNextStage();
             }        
         }
@@ -572,7 +520,7 @@ class Game {
     onPlayerMiss() {
         if (!this.player.alive) return;
         this.player.alive = false;
-        this.respawnTimer = 0; // タイマー初期化
+        this.respawnTimer = 0; 
         
         if (this.sc.audio) this.sc.audio.playExplosion();
         for (let i = 0; i < 30; i++) {
@@ -614,7 +562,7 @@ class Game {
 
         // 5. 撃破スコアテキスト
         this.scoreTexts.forEach(st => st.draw(this.ctx));
-
+        
         // 6. 自機
         this.player.draw(this.ctx);
 
@@ -631,12 +579,8 @@ class Game {
         // ステージ開始時のタイトル表示
         if (this.frame > 0 && this.frame < 180) {
             let alpha = 1.0;
-
-            if (this.frame <= 30) {
-                alpha = this.frame / 30;
-            } else if (this.frame > 120) {
-                alpha = (180 - this.frame) / 60;
-            }
+            if (this.frame <= 30) alpha = this.frame / 30;
+            else if (this.frame > 120) alpha = (180 - this.frame) / 60;
 
             this.ctx.font = '14px "Press Start 2P", cursive';
             this.ctx.fillStyle = `rgba(0, 255, 255, ${alpha})`;
@@ -654,10 +598,9 @@ class Game {
             this.ctx.fillText('GAME OVER', GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2);
         }
 
-        // ステージクリア演出（【バグ修正】文字列のプロパティ参照バグを駆除）
+        // ステージクリア演出
         if (this.isCleared) {
             const stageNameStr = this.ScenarioManager.stageName; 
-            
             this.ctx.fillStyle = '#0FF';
             this.ctx.fillText(`STAGE ${this.currentStageNum} CLEAR`, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2);            
             this.ctx.font = '10px "Press Start 2P", cursive';
@@ -670,10 +613,8 @@ class Game {
     /** ゲーム終了 */
     endSession(msg) {
         if (!this.isRunning && this.gameOverTimer > 182) return;
-
         this.isRunning = false;
         
-        // リスナーのクリーンアップ
         window.removeEventListener('keydown', this._boundKeyDown);
         window.removeEventListener('mousedown', this._boundMouseDown);
 

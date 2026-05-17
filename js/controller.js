@@ -13,20 +13,20 @@
  */
 class SystemController {
     constructor() {
-        this.VERSION = "0.48";
+        this.VERSION = "0.49";
         this.canvas = document.getElementById('game-canvas');
 
         // URLパラメータの解析（GitHub上の別ブランチやタグをテストするため）
         const urlParams = new URLSearchParams(window.location.search);
         const tag = urlParams.get('tag');
         const refPath = tag ? `tags/${tag}` : `heads/${urlParams.get('branch') || 'main'}`;
-        this.branch = urlParams.get('branch') || 'main';
         const githubBase = `https://raw.githubusercontent.com/rmiura-ani/void-circuit-assets/refs/${refPath}/`;
 
-        // 🚀 【優先切替】ローカルなら指定されたローカルパスを強制適用、本番ならGitHub
+        // 【優先切替】ローカルなら指定されたローカルパスを強制適用、本番ならGitHub
         const LOCAL_ASSET_ROOT = "../void-circuit-assets/";
         this.isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
         this.assetBase = this.isLocal ? LOCAL_ASSET_ROOT : githubBase;
+        this.branch = this.isLocal ? 'local' : (urlParams.get('branch') || 'main');
 
         // パスが必ずスラッシュ（/）で終わるように補正
         if (!this.assetBase.endsWith("/")) {
@@ -107,7 +107,7 @@ class SystemController {
 
         try {
             // 1. シナリオYAMLのロード
-            const loadSuccess = await this.ScenarioManager.loadScenario(scenarioPath, `STAGE_${stageNum}`);
+            const loadSuccess = await this.ScenarioManager.loadScenario(scenarioPath, this.branch);
             if (!loadSuccess) throw new Error("Scenario YAML load returned false.");
 
             // 2. 【ここを追加！】YAMLに記述されている敵の画像名を動的に集めてプリロード
@@ -303,7 +303,7 @@ class SystemController {
         const cheatStr = r.cheatUsed ? (isShare ? '(CHEAT)' : '(CHT)') : '';
         const extendStr = r.extend === 'NONE' ? 'OFF' : `${(r.extend/1000000)}M`;
         const livesStr = `${r.lives}L`;
-        const missionName = r.missionName || `STAGE_${this.game?.currentStageNum || 1}`;
+        const missionName = r.missionName.toUpperCase();
 
         // 操作モード判定
         let controlSuffix = '-MK';

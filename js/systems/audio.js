@@ -27,16 +27,21 @@ class AudioManager {
                 shot:      { file: 'shot.ogg',      vol: 0.3 },
                 changeWp:  { file: 'changeWp.ogg',  vol: 0.8 },
                 explosion: { file: 'explosion.ogg', vol: 0.3 },
-                hitHurt:   { file: 'hitHurt.ogg',   vol: 0.5 },
+                hitSound:  { file: 'hitHurt.ogg',   vol: 0.5 },
                 powerUp:   { file: 'powerUp.ogg',   vol: 0.7 },                
             }
         };
         this.seKeys = Object.keys(this.CONFIG.SE);
         
-        // 🚨 【イコライザー用】Web Audio API関連の管理プロパティ
         this.audioCtx = null;
         this.analyser = null;
         this.mediaSources = new Map(); // 各Audio要素とSourceNodeの紐付けキャッシュ
+
+        // 例: keyが 'shot' なら、this.playShot という関数を自動で生み出す
+        Object.keys(this.CONFIG.SE).forEach(key => {
+            const methodName = 'play' + key.charAt(0).toUpperCase() + key.slice(1);
+            this[methodName] = () => this._playSE(key);
+        });
     }
 
     /** Controllerから動的に構築されたBGMリストを受け取る */
@@ -214,16 +219,12 @@ class AudioManager {
             
             // 再生終了後にメモリから解放されるようにする
             clone.addEventListener('ended', () => {
+                clone.pause();
+                clone.src = "";
                 clone.remove();
             }, { once: true });
         }
     }
-
-    playShot() { this._playSE('shot'); }
-    playChangeWp() { this._playSE('changeWp'); }
-    playExplosion() { this._playSE('explosion'); }
-    playHitSound() { this._playSE('hitHurt'); }
-    playPowerUp() { this._playSE('powerUp'); }
 
     // Sound Test Helpers
     get bgmCount() { return this.DYNAMIC_BGM_LIST.length; }
