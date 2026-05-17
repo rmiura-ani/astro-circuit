@@ -13,7 +13,7 @@
  */
 class SystemController {
     constructor() {
-        this.VERSION = "0.47";
+        this.VERSION = "0.48";
         this.canvas = document.getElementById('game-canvas');
 
         // URLパラメータの解析（GitHub上の別ブランチやタグをテストするため）

@@ -221,7 +221,7 @@ class AssetManager {
     }
 
     /**
-     * 【大改修】画像をオンデマンドで取得・ロードする
+     * 画像をオンデマンドで取得・ロードする
      * @param {string} key 画像のファイル名 (例: 'enemy_assault.webp')
      * @returns {HTMLImageElement|null} ロード済みの画像。まだロード中ならnullか仮の画像を返す
      */

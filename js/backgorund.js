@@ -2,7 +2,7 @@
  * PROJECT: VOID-CIRCUIT
  *
  * background.js
- * 
+ *
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
@@ -317,7 +317,7 @@ class Stage6Background extends StageBackground {
     }
 }
 
-// --- STAGE-7: Absolute Core（【星の超クッキリ・輝度＆視認性MAX強化版】） ---
+// --- STAGE-7: Absolute Core（スクロール同期・完全消滅修正版） ---
 class Stage7Background extends StageBackground {
     constructor(width, height) {
         super(width, height, "#202020");
@@ -325,32 +325,35 @@ class Stage7Background extends StageBackground {
         // 7面専用：中枢を漂う100機の高輝度ドット粒子
         this.coreStars = this.initStars(100);
         this.coreStars.forEach(s => {
-            s.speed = Math.random() * 0.4 + 0.15; // 厳かなゆっくり移動
-            // 【強化】暗黒背景でも絶対に潰れない「1.5〜2.5ピクセル」の確実なドットサイズを保証
-            s.size = Math.random() * 1.0 + 1.5;   
+            s.speed = Math.random() * 0.4 + 0.15; 
+            s.size = Math.random() * 1.0 + 1.5;   // 最低サイズ1.5px保証
         });
+
+        this.fortressScrollY = 0;
     }
 
     update(frame) {
         this.frameTimer = frame;
         this.updateStars(this.coreStars);
+        this.fortressScrollY += 0.6; // 重厚な低速スクロール
     }
 
     draw(ctx) {
-        // 重厚なダークグレー要塞背景
+        // LAYER 1: 【最奥】宇宙要塞の深層グラデーション
         this.drawBaseGradient(ctx, "#0A0A0A", "#1C1C1C");
         
-        // 【大改良】基底の透明度ブレンドを通さず、不透明度「完全な100%の純白（#FFFFFF）」で描画
-        // これにより、要塞深部の闇の中でも星たちがダイヤモンドのようにクッキリと瞬きます！
+        // LAYER 2: 【奥】100%純白の高輝度な星流（電子のチリ）
         ctx.fillStyle = "#FFFFFF";
         this.coreStars.forEach(s => {
-            // スピードに応じた自然なまたたき（輝度）の変化を、安全なアルファ値（0.4〜0.9）で表現
             ctx.globalAlpha = (s.speed / 0.55) * 0.5 + 0.4;
             ctx.fillRect(s.x, s.y, s.size, s.size);
         });
-        ctx.globalAlpha = 1.0; // リセット
+        ctx.globalAlpha = 1.0; 
 
-        // サイバーグリッド線
+        // LAYER 3: 【中】不透明な漆黒の要塞構造物シルエット（星を完全に遮蔽）
+        this.drawFortressStructures(ctx);
+
+        // LAYER 4: 【手前】サイバーグリッド線（最前面レイヤー）
         ctx.strokeStyle = "rgba(0, 180, 180, 0.12)"; 
         ctx.lineWidth = 0.5;
 
@@ -366,6 +369,112 @@ class Stage7Background extends StageBackground {
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
             ctx.stroke();
+        }
+    }
+
+    // 不透明なソリッドカラーで、星を完全に遮る要塞構造を描画（境界値バグ完全修正版）
+    drawFortressStructures(ctx) {
+        const colorMain = "#040404";      
+        const colorLine = "#121C1C";      
+        const colorDetail = "rgba(0, 210, 210, 0.25)"; 
+
+        ctx.fillStyle = colorMain; 
+        ctx.strokeStyle = colorLine;
+        ctx.lineWidth = 1;
+
+        // 【バグ対策の核心】
+        // 要塞全体の縦幅（マップの高さ）を 1000px と定義。
+        // ループの総長さを「画面の高さ ＋ マップの高さ」にすることで、
+        // すべての構造物が画面の一番下を完全に通り抜けて消えるまで、絶対にリセットが起きません。
+        const mapHeight = 1000;
+        const loopLength = this.height + mapHeight;
+        const currentScroll = this.fortressScrollY % loopLength;
+
+        // 巨大マップ全体の基準となるトップ座標（画面の上の隠れた位置からスタート）
+        const mapTopY = -mapHeight + currentScroll;
+
+        // ==================================================
+        // レイヤーA: 画面左側（巨大隔壁パーツ / マップ内のY座標: 50px地点に配置）
+        // ==================================================
+        let yA = mapTopY + 50;
+        if (yA < this.height && yA + 220 > 0) {
+            ctx.fillStyle = colorMain; 
+            ctx.fillRect(0, yA, 50, 220); 
+            ctx.strokeRect(0, yA, 50, 220);
+
+            // 装甲プレートの横スリット
+            ctx.strokeStyle = "#0F1616";
+            for (let l = 20; l < 220; l += 40) {
+                ctx.beginPath();
+                ctx.moveTo(0, yA + l); ctx.lineTo(50, yA + l);
+                ctx.stroke();
+            }
+            
+            // 突き出たメカパーツ＆大型トラス
+            ctx.fillStyle = colorMain;
+            ctx.fillRect(50, yA + 60, 15, 80);
+            ctx.strokeStyle = colorLine;
+            ctx.beginPath();
+            ctx.moveTo(50, yA + 60); ctx.lineTo(75, yA + 80); ctx.lineTo(50, yA + 100);
+            ctx.moveTo(50, yA + 100); ctx.lineTo(75, yA + 120); ctx.lineTo(50, yA + 140);
+            ctx.stroke();
+        }
+
+        // ==================================================
+        // レイヤーB: 画面中央奥（基盤を走るフラット配線ダクト）
+        // ==================================================
+        ctx.fillStyle = "#060606";
+        ctx.fillRect(this.width * 0.35, 0, 30, this.height); 
+        ctx.fillStyle = colorLine;
+        ctx.fillRect(this.width * 0.38, 0, 1, this.height);  
+        ctx.fillRect(this.width * 0.42, 0, 1, this.height);
+
+        // ==================================================
+        // レイヤーC: 画面右側（放熱フィンとインジケーターパネル / マップ内のY座標: 450px地点に配置）
+        // ==================================================
+        let yC = mapTopY + 450;
+        if (yC < this.height && yC + 300 > 0) {
+            ctx.fillStyle = colorMain;
+            ctx.fillRect(this.width - 65, yC, 65, 300);
+            ctx.strokeRect(this.width - 65, yC, 65, 300);
+
+            // 放熱フィン（溝）
+            ctx.fillStyle = "#0F1616";
+            for (let f = 10; f < 120; f += 8) {
+                ctx.fillRect(this.width - 60, yC + f, 25, 2); 
+            }
+
+            // 凸凹したトランスユニット
+            ctx.fillStyle = colorMain;
+            ctx.fillRect(this.width - 80, yC + 140, 15, 50);
+            ctx.strokeRect(this.width - 80, yC + 140, 15, 50);
+            ctx.fillRect(this.width - 75, yC + 200, 10, 40);
+            ctx.strokeRect(this.width - 75, yC + 200, 10, 40);
+            
+            // インジケーター明滅
+            const blink = Math.abs(Math.sin(this.frameTimer * 0.02)) * 0.15 + 0.15;
+            ctx.fillStyle = `rgba(0, 210, 210, ${blink})`;
+            for(let row = 0; row < 4; row++) {
+                ctx.fillRect(this.width - 30, yC + 150 + (row * 15), 5, 5);
+                ctx.fillRect(this.width - 18, yC + 150 + (row * 15), 5, 5);
+            }
+        }
+
+        // ==================================================
+        // レイヤーD: 画面全域（要塞連絡ブリッジ / マップ内のY座標: 850px地点に配置）
+        // ==================================================
+        let yD = mapTopY + 850;
+        if (yD < this.height && yD + 24 > 0) {
+            ctx.fillStyle = colorMain;
+            ctx.fillRect(0, yD, this.width, 24); 
+            ctx.strokeStyle = colorLine;
+            ctx.strokeRect(-10, yD, this.width + 20, 24);
+            
+            // ブリッジ上の補強フレームリブ
+            ctx.fillStyle = "#080E0E";
+            for (let x = 20; x < this.width; x += 32) {
+                ctx.fillRect(x, yD, 3, 24);
+            }
         }
     }
 }

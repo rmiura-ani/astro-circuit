@@ -179,58 +179,7 @@ class ScenarioManager {
 
         // 重複生成防止
         if (data.spawned) return;
-
-        let enemy;
-        
-        // 敵タイプに応じたクラス生成
-        switch (data.type) {
-            case 'sine':
-                enemy = new SineEnemy(game, x, y, bType, data.phase || 0);
-                if (data.amplitude) enemy.amplitude = data.amplitude;
-                if (data.frequency) enemy.frequency = data.frequency;
-                break;
-
-            case 'stationary':
-                enemy = new StationaryEnemy(
-                    game, x, y, bType, hp, 
-                    data.stopY || 120, 
-                    data.waitTime || 180
-                );
-                break;
-
-            // --- 🚨 【新規ザコ追加】個性豊かなメンバーたち ---
-            case 'assault':
-                enemy = new AssaultEnemy(game, x, y, bType);
-                break;
-
-            case 'hunter':
-                enemy = new HunterEnemy(game, x, y, bType);
-                break;
-
-            case 'shield':
-                enemy = new ShieldEnemy(game, x, y, bType);
-                break;
-
-            case 'scout':
-                // YAML側から左右のスタート方向(isLeft)を指定可能に。デフォルトはtrue(左から右)
-                const isLeftToRight = data.isLeft !== undefined ? data.isLeft : true;
-                enemy = new ScoutEnemy(game, x, y, bType, isLeftToRight);
-                break;
-
-            // --- 🚨 【ボス関連】共通処理をまとめつつ分岐 ---
-            case 'boss_01':
-                enemy = new BossEnemy_01(game, x, y, hp, timeLimit, timeMultiplier);
-                break;
-
-            case 'boss_02':
-                enemy = new BossEnemy_02(game, x, y, hp, timeLimit, timeMultiplier);
-                break;
-
-            case 'straight':
-            default:
-                enemy = new StraightEnemy(game, x, y, bType, hp);
-                break;
-        }
+        const enemy = createEnemyInstance(data.type, game, x, y, bType, data);
 
         // 🚨 ボス系エンティティが生成された場合の共通演出トリガー
         if (data.type && data.type.includes('boss')) {
