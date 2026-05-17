@@ -298,6 +298,7 @@ class Game {
         if (dScnFrame) dScnFrame.innerText = this.ScenarioManager.currentScenarioFrame;
         if (dIndex) dIndex.innerText = `${this.ScenarioManager.currentIndex} / ${this.ScenarioManager.scenario.length}`;
 
+        // タイムボーナス残量の計算
         const bonusEl = document.getElementById('debug-bonus-time');
         const boss = this.entities.find(e => e.isBoss); 
         
@@ -311,8 +312,7 @@ class Game {
         } else if (bonusEl) {
             bonusEl.innerText = "---";
             bonusEl.style.color = "#888";
-        }
-
+        }        
         const loadEl = document.getElementById('debug-load');
         if (loadEl) loadEl.innerText = this.entities.length + this.particles.length;
     }
@@ -439,10 +439,10 @@ class Game {
 
         if (enemy.isBoss){
             const elapsed = this.frame - this.bossStartTime;
-            const limit = enemy.timeLimit || 3600; 
-            const multiplier = enemy.timeMultiplier || 100;
-
-            const rawBonus = Math.max(0, (limit - elapsed) * multiplier);
+            const limit = enemy.timeLimit || 3600;
+            const maxBonus = amount * 0.25;
+            const decayRate = maxBonus / limit;
+            const rawBonus = Math.max(0, maxBonus - (elapsed * decayRate));
             const bonus = Math.floor(rawBonus / 100) * 100;
             if (bonus > 0) {
                 this.score += bonus;

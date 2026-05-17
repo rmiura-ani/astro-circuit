@@ -130,17 +130,12 @@ class ScenarioManager {
     skipToAfterLoop() {
         for (let i = this.currentIndex; i < this.scenario.length; i++) {
             if (this.scenario[i].type === 'LOOP_END') {
-                // LOOP_END の次のイベントまでインデックスを飛ばす
                 this.currentIndex = i + 1;
-                
-                // シナリオ内の内部時計も、その LOOP_END のフレームまで進める
                 this.currentScenarioFrame = this.scenario[i].frame;
-                
-                console.log(`[System] Boss defeated! Skipped to scenario frame: ${this.currentScenarioFrame}`);
                 return;
             }
         }
-    } 
+    }
 
     /** リセット */
     reset() {
@@ -167,12 +162,17 @@ class ScenarioManager {
         const y = data.y ?? -32; // 基本は画面外上部
         
         // ボス専用パラメータの自動逆算ロジック
-        let timeLimit = data.timeLimit;
-        let timeMultiplier = data.timeMultiplier;
         if (data.type && data.type.includes('boss')) {
             const minTime = (hp / 2) * 8; 
-            if (!timeLimit) timeLimit = Math.floor(minTime * 4); // 最速の4倍を制限時間に
-            if (!timeMultiplier) timeMultiplier = Math.floor(hp * 3.33); 
+            if (!data.timeLimit) {
+                data.timeLimit = Math.floor(minTime * 4);
+            }
+            if (!data.timeLimit || isNaN(data.timeLimit)) {
+                data.timeLimit = 3600;
+            }
+            if (!data.timeMultiplier) {
+                data.timeMultiplier = Math.floor(hp * 3.33);
+            }
         }
 
         // 重複生成防止

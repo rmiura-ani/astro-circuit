@@ -13,7 +13,7 @@
  */
 class SystemController {
     constructor() {
-        this.VERSION = "0.49";
+        this.VERSION = "0.50";
         this.canvas = document.getElementById('game-canvas');
 
         // URLパラメータの解析（GitHub上の別ブランチやタグをテストするため）
@@ -115,9 +115,18 @@ class SystemController {
             const enemyTypes = this.ScenarioManager.scenario.map(e => e.type);
             const uniqueTypes = [...new Set(enemyTypes)]; // 重複を排除
 
-            const imagesToPreload = uniqueTypes.map(type => {
-                if (type.startsWith('boss')) return `enemy_${type}.webp`; // boss_01 -> enemy_boss_01.webp
-                return `enemy_${type}.webp`; // straight -> enemy_straight.webp
+            const imagesToPreload = uniqueTypes.flatMap(type => {
+                // 7面ボス（boss_07）だけは第1形態・第2形態の2ファイルを出力
+                if (type === 'boss_07') {
+                    return [
+                        'enemy_boss_07_phase1.webp',
+                        'enemy_boss_07_phase2.webp'
+                    ];
+                }
+                if (type.startsWith('boss')) {
+                    return `enemy_${type}.webp`; // boss_01 -> enemy_boss_01.webp
+                }
+                return `enemy_${type}.webp`;     // straight -> enemy_straight.webp
             });
 
             // 割り出した画像をステージ開始前に一斉に裏でロード（終わるまで待つ）
