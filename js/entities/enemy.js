@@ -36,7 +36,7 @@ class Enemy extends Entity {
     /** 敵の移動と攻撃を管理する */
     update(game) {
         this.y += this.speed;
-        if (this.y > 480) {
+        if (this.y > GAME_CONFIG.HEIGHT) {
             this.active = false;
             return;
         }
@@ -108,7 +108,7 @@ class Enemy extends Entity {
 
         // 当たり判定スキップと完全に同じ条件（画面外、または上部30pxのHUDエリア内）
         if (
-            this.y + this.height < 30 ||
+            this.y + this.height < GAME_CONFIG.UI_HEADER_HEIGHT ||
             this.y >= GAME_CONFIG.HEIGHT ||
             this.x + this.width <= 0 ||
             this.x >= GAME_CONFIG.WIDTH

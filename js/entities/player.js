@@ -12,11 +12,24 @@
  * プレイヤーが操作する自機クラス
  */
 class Player extends Entity {
+    // --- 調整用定数（マジックナンバーの共通管理） ---
+    static START_WIDTH = 32;       // 自機の幅
+    static START_HEIGHT = 32;      // 自機の高さ
+    static DEFAULT_SPEED = 5;      // 移動速度
+    static HIT_RADIUS = 10; // 当たり判定の半径
+    
+    static CD_STRAIGHT = 8;        // STRAIGHT時の連射クールダウン(フレーム)
+    static CD_WIDE = 12;           // WIDE時の連射クールダウン(フレーム)
+    
     constructor(game, input, x, y) {
-        super(x, y, 32, 32);
+        super(x, y, Player.START_WIDTH, Player.START_HEIGHT);
+        this.halfWidth = this.width / 2;
+        this.halfHeight = this.height / 2;
+        this.hitRadiusSq = Player.HIT_RADIUS * Player.HIT_RADIUS;
+        
         this.game = game;
         this.input = input;
-        this.speed = 5;
+        this.speed = Player.DEFAULT_SPEED;
         this.alive = true;
         this._invincibleTimer = 0;
 
@@ -28,10 +41,13 @@ class Player extends Entity {
         this.image = game.assets.get(fileName);
         this.isLoaded = !!this.image;
 
-        this.input.getAndResetCanvasOutClick()     // 1回読み捨て
+        this.input.getAndResetCanvasOutClick();     // 1回読み捨て
     }
 
-    setInvincible(frames) { this._invincibleTimer = frames; }
+    get centerX() { return this.x + this.halfWidth; }
+    get centerY() { return this.y + this.halfHeight; }    
+
+    setInvincible(frames = GAME_CONFIG.PLAYER_SPAWN_INVINCIBLE_TIME) { this._invincibleTimer = frames; }
     get isInvincible() { return this._invincibleTimer > 0; }
     
     // --- 武器制御 ---
@@ -72,7 +88,7 @@ class Player extends Entity {
             this._handleTouchMove(this.input.touchX, this.input.touchY, cw, ch);
         }
 
-        // 3. 武器換装とショット自動生成の内部処理（引数から game を外す）
+        // 3. 武器換装とショット自動生成の内部処理
         this._handleWeaponSwitch(this.input);
         this._handleShooting(this.input);
     }
@@ -85,7 +101,7 @@ class Player extends Entity {
         if (isKeyboardTrigger || isMouseTrigger) {
             if (this.weaponSwitchReady) {
                 this.weaponMode = (this.weaponMode === 'STRAIGHT') ? 'WIDE' : 'STRAIGHT';
-                this.game.weaponMode = this.weaponMode; // this.game を使用
+                this.game.weaponMode = this.weaponMode; 
                 if (this.game.sc && this.game.sc.audio) this.game.sc.audio.playChangeWp();                 
                 this.weaponSwitchReady = false; // キーが離されるまでロック
             }
@@ -99,23 +115,31 @@ class Player extends Entity {
         const isFiring = input.isPressed('KeyZ') || input.isPressed('Space') || input.isTouching;
         
         if (isFiring && this.shotCooldown === 0) {
-            // 発射の基準点を自機の先端に設定
-            const bx = this.x + this.width / 2;
-            const by = this.y;
+            // 発射の基準点（自機の横方向の中心、および上端）を動的に計算
+            const centerX = this.x + this.width / 2;
+            const topY = this.y;
 
             if (this.weaponMode === 'STRAIGHT') {
-                // 【STRAIGHT】: 8フレーム間隔で正面へ強力な2連射
-                this.game.entities.push(new Bullet(bx - 8, by, 0)); // this.game を使用
-                this.game.entities.push(new Bullet(bx + 4, by, 0)); 
+                // 【STRAIGHT】: 正面へ強力な2連射
+                // 弾の幅(4)を考慮し、中心から左右に均等に並ぶようオフセットを計算
+                const offset = 6; 
+                this.game.entities.push(new Bullet(centerX - offset, topY, 0)); 
+                this.game.entities.push(new Bullet(centerX + (offset - Bullet.DEFAULT_WIDTH), topY, 0)); 
+                
                 this.game.stats.shotsFired += 2; 
-                this.shotCooldown = 8; // 8Fの硬直
+                this.shotCooldown = Player.CD_STRAIGHT; 
             } else if (this.weaponMode === 'WIDE') {
-                // 【WIDE】: 12フレーム間隔で扇状に広がる3方向拡散ショット
-                this.game.entities.push(new Bullet(bx - 2, by, 0));    // this.game を使用
-                this.game.entities.push(new Bullet(bx - 2, by, -3.5)); 
-                this.game.entities.push(new Bullet(bx - 2, by, 3.5));  
+                // 【WIDE】: 3方向拡散ショット
+                // 中央の弾がちょうど自機の真ん中から出るよう、弾の幅の半分(Bullet.DEFAULT_WIDTH / 2)を引く
+                const halfBulletW = Bullet.DEFAULT_WIDTH / 2;
+                const bulletStartX = centerX - halfBulletW;
+
+                this.game.entities.push(new Bullet(bulletStartX, topY, 0));    
+                this.game.entities.push(new Bullet(bulletStartX, topY, -3.5)); 
+                this.game.entities.push(new Bullet(bulletStartX, topY, 3.5));  
+                
                 this.game.stats.shotsFired += 3; 
-                this.shotCooldown = 12; // 12F의硬直
+                this.shotCooldown = Player.CD_WIDE; 
             }
 
             // ショットSEの再生
@@ -162,22 +186,28 @@ class Player extends Entity {
 /**
  * 弾クラス（自機用）
  */
-class Bullet {
+class Bullet extends Entity {
+    // 弾の基本性能を定数化
+    static DEFAULT_WIDTH = 4;
+    static DEFAULT_HEIGHT = 10;
+    static DEFAULT_VY = -7;
+    static OUT_OF_BOUNDS_OFFSET = 20; // 画面外にどれだけはみ出したら消去するか
+
     constructor(x, y, vx = 0) {
-        this.x = x;
-        this.y = y;
+        super(x, y, Bullet.DEFAULT_WIDTH, Bullet.DEFAULT_HEIGHT);
+
         this.vx = vx;  
-        this.vy = -7;  
-        this.width = 4;
-        this.height = 10;
-        this.active = true;
+        this.vy = Bullet.DEFAULT_VY;  
+
+        this.halfWidth = this.width / 2;
+        this.halfHeight = this.height / 2;
     }
 
     update(game) {
         this.x += this.vx; 
         this.y += this.vy; 
 
-        if (this.y < -20 || this.x < -20 || this.x > game.width + 20) {
+        if (this.isOutOfBounds(Bullet.OUT_OF_BOUNDS_OFFSET)) {
             this.active = false;
         }
     }

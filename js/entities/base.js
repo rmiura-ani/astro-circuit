@@ -21,9 +21,13 @@ class Entity {
     }
 
     // 画面外判定（上下左右の余白指定可能）
-    isOutOfBounds(cw = 320, ch = 480, margin = 50) {
-        return (this.y > ch + margin || this.y < -margin || 
-                this.x > cw + margin || this.x < -margin);
+    isOutOfBounds(margin = 50) {
+        return (
+            this.y > GAME_CONFIG.HEIGHT + margin || 
+            this.y < -margin || 
+            this.x > GAME_CONFIG.WIDTH + margin || 
+            this.x < -margin
+        );
     }
 }
 
@@ -31,6 +35,7 @@ class Entity {
  * 敵の弾クラス
  */
 class EnemyBullet extends Entity {
+
     constructor(x, y, vx, vy) {
         super(x, y, 4, 4); // 判定は 4x4
         this.vx = vx;

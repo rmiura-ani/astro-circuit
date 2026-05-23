@@ -87,7 +87,7 @@ class Game {
     /** 初期化 */
     reset() {
         this._score = 0;
-        this._lives = this.sc.config.lives;
+        this.currentLives   = this.sc.config.lives;
         this.stats = { enemiesSpawned: 0, enemiesKilled: 0, shotsFired: 0, shotsHit: 0 };
         this.isInvincibleCheat = this.sc.config.isInvincibleCheat;
 
@@ -119,7 +119,9 @@ class Game {
         this.entities = [];
         this.particles = [];
         this.scoreTexts = [];
-        this.player = new Player(this, this.sc.input, GAME_CONFIG.WIDTH / 2 - 16, GAME_CONFIG.HEIGHT - 80);
+        this.player = new Player(this, this.sc.input, 0, 0);
+        this.player.x = GAME_CONFIG.WIDTH / 2 - this.player.halfWidth;
+        this.player.y = GAME_CONFIG.HEIGHT - GAME_CONFIG.PLAYER_SPAWN_Y_OFFSET ;
 
         this.ScenarioManager.reset();
         if (this.sc.audio) this.sc.audio.resetBGM();
@@ -131,7 +133,10 @@ class Game {
         
         const hiScoreDisplay = document.getElementById('hi-score-display');
         if (hiScoreDisplay) hiScoreDisplay.classList.remove('counter-stop');
-        
+
+        const livesDisplay = document.getElementById('lives-display');
+        if (livesDisplay) livesDisplay.style.display = 'block';
+
         const weaponContainer = document.getElementById('weapon-container');
         if (weaponContainer) weaponContainer.style.display = 'block';
 
@@ -247,7 +252,7 @@ class Game {
         
         if (!this.player.alive && this.currentLives > 0) {
             this.respawnTimer++;
-            if (this.respawnTimer > 90) { 
+            if (this.respawnTimer > GAME_CONFIG.PLAYER_SPAWN_WAIT_TIME) { 
                 this.respawnPlayer();
                 this.respawnTimer = 0;
             }
@@ -341,19 +346,19 @@ class Game {
         }
 
         // 自機の当たり判定（自機 vs 敵、自機 vs 敵弾）
-        if (!this.player.isInvincible && !this.isInvincibleCheat) {
-            const px = this.player.x + 16;
-            const py = this.player.y + 16;
-            const PLAYER_HIT_RADIUS_SQ = 100; 
+        if (!this.player.isInvincible) {
+            const px = this.player.x + this.player.halfWidth;
+            const py = this.player.y + this.player.halfHeight;
+            const hitRadiusSq = this.player.hitRadiusSq;
 
             for (const e of enemies) {
-                if (this.isCircleHit(px, py, PLAYER_HIT_RADIUS_SQ, e)) {
+                if (this.isCircleHit(px, py, hitRadiusSq, e)) {
                     this.onPlayerMiss();
                     return; 
                 }
             }
             for (const eb of enemyBullets) {
-                if (this.isCircleHit(px, py, PLAYER_HIT_RADIUS_SQ, eb)) {
+                if (this.isCircleHit(px, py, hitRadiusSq, eb)) {
                     this.onPlayerMiss();
                     return;
                 }
@@ -363,7 +368,7 @@ class Game {
         // 敵の当たり判定（敵 vs 自機弾）
         for (const enemy of enemies) {
             if (
-                enemy.y + enemy.height < 30 ||            
+                enemy.y + enemy.height < GAME_CONFIG.UI_HEADER_HEIGHT ||            
                 enemy.y >= GAME_CONFIG.HEIGHT ||          
                 enemy.x + enemy.width <= 0 ||             
                 enemy.x >= GAME_CONFIG.WIDTH              
@@ -400,30 +405,36 @@ class Game {
         }
     }
 
-    /** 円形判定のヘルパー */
+    /** 円形判定のヘルパー（自機用。ボス戦だと甘いかも） */
     isCircleHit(px, py, radiusSq, target) {
-        const tx = target.x + (target.width || 32) / 2;
-        const ty = target.y + (target.height || 32) / 2;
+        const tx = target.x + target.width / 2;
+        const ty = target.y + target.height / 2;
         const dx = px - tx;
         const dy = py - ty;
         return (dx * dx + dy * dy) < radiusSq;
     }
 
-    /** あたり判定詳細 */
+    /** 矩形判定のヘルパー */
     isHit(r1, r2) {
-        const w1 = r1.hitWidth || r1.width || 8;
-        const h1 = r1.hitHeight || r1.height || 8;
-        const w2 = r2.hitWidth || r2.width || 32;
-        const h2 = r2.hitHeight || r2.height || 32;
+        // hitWidth / hitHeight が無ければ、通常の width / height を使う
+        const w1 = r1.hitWidth ?? r1.width;
+        const h1 = r1.hitHeight ?? r1.height;
+        const w2 = r2.hitWidth ?? r2.width;
+        const h2 = r2.hitHeight ?? r2.height;
 
-        const r1cx = r1.x + (r1.width || 8) / 2;
-        const r1cy = r1.y + (r1.height || 8) / 2;
-        const r2cx = r2.x + (r2.width || 32) / 2;
-        const r2cy = r2.y + (r2.height || 32) / 2;
+        // それぞれの「中心」を基準にする場合（画像の中央に判定を配置）
+        // ※ 毎回割り算をしないよう、あらかじめ端の座標を計算します
+        const r1Left = r1.x + (r1.width - w1) / 2;
+        const r1Top  = r1.y + (r1.height - h1) / 2;
+        const r2Left = r2.x + (r2.width - w2) / 2;
+        const r2Top  = r2.y + (r2.height - h2) / 2;
 
-        return Math.abs(r1cx - r2cx) < (w1 + w2) / 2 &&
-            Math.abs(r1cy - r2cy) < (h1 + h2) / 2;
-    }
+        // 4つの方向で重なりがあるかをチェック（1つでも満たさなければ当たっていない）
+        return r1Left < r2Left + w2 &&
+            r1Left + w1 > r2Left &&
+            r1Top < r2Top + h2 &&
+            r1Top + h1 > r2Top;
+        }
 
     /** 得点追加 */
     calculateAttachScore(enemy){
@@ -519,14 +530,24 @@ class Game {
     /** 被弾ミス */
     onPlayerMiss() {
         if (!this.player.alive) return;
-        this.player.alive = false;
-        this.respawnTimer = 0; 
-        
+
         if (this.sc.audio) this.sc.audio.playExplosion();
-        for (let i = 0; i < 30; i++) {
-            this.particles.push(new Particle(this.player.x + 16, this.player.y + 16, 'player'));
+        const px = this.player.x + this.player.halfWidth;
+        const py = this.player.y + this.player.halfHeight;
+
+        if (this.isInvincibleCheat){
+            for (let i = 0; i < 1; i++) {
+                this.particles.push(new Particle(px, py, 'player'));
+            }
+            this.player.setInvincible();
+            return; //無敵
+        } else {
+            for (let i = 0; i < 30; i++) {
+                this.particles.push(new Particle(px, py, 'player'));
+            }
         }
-        
+        this.player.alive = false;
+        this.respawnTimer = 0;      
         this.currentLives--;
         if (this.currentLives <= 0 && this.sc.audio) {
             this.sc.audio.fadeOutBGM();
@@ -535,10 +556,10 @@ class Game {
 
     /** リスポーン */
     respawnPlayer() {
-        this.player.x = GAME_CONFIG.WIDTH / 2 - 16;
-        this.player.y = GAME_CONFIG.HEIGHT - 80;
+        this.player.x = GAME_CONFIG.WIDTH / 2 - this.player.halfWidth;
+        this.player.y = GAME_CONFIG.HEIGHT - GAME_CONFIG.PLAYER_SPAWN_Y_OFFSET;
         this.player.alive = true;
-        this.player.setInvincible(180);
+        this.player.setInvincible();
     }
 
     /** 描画マスタ */
