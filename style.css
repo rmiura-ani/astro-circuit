@@ -297,6 +297,7 @@ canvas {
 
 .config-item {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     width: 100%;
     margin: 8px 0;
@@ -304,6 +305,13 @@ canvas {
     padding: 5px 8px;
     box-sizing: border-box;
     white-space: nowrap;
+}
+
+.config-item[data-setting="bgm"] .value {
+    display: block;
+    width: 100%;           /* 横幅を100%にすることで、強制的に2段目へ回り込ませる */
+    margin-top: 6px;
+    text-align: right;
 }
 
 .config-item:hover {

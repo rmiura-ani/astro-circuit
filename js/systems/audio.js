@@ -6,6 +6,8 @@
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
+ *
+ * [Modified] 2026: Added 'onBGMEnded' callback hook and non-loop toggles for Sound Test.
  */
 
 /**
@@ -19,6 +21,9 @@ class AudioManager {
         this.fadeInterval = null;
         this.bgms = {};
         this.sounds = {};
+
+        // BGMテスト用の再生終了時コールバックを保持するプロパティ
+        this.onBGMEnded = null;
 
         // 起動時は空っぽにしておく
         this.DYNAMIC_BGM_LIST = []; 
@@ -87,7 +92,7 @@ class AudioManager {
         return new Promise((resolve) => {
             const audio = new Audio(this.basePath + fileName);
             audio.crossOrigin = "anonymous";
-            audio.loop = true;
+            audio.loop = true; // ゲーム本編は標準でループ再生
             audio.volume = 0.7;
 
             let isResolved = false;
@@ -136,8 +141,16 @@ class AudioManager {
             this.currentBgm.currentTime = 0; // 再生直前に確実に頭出しを行う
             this.currentBgm.volume = 0.7;
             
-            // 🚨 【ここが核心】Audioタグの音声を Web Audio API の解析土管へバイパス接続する
+            // Audioタグの音声を Web Audio API の解析土管へバイパス接続する
             this.setupAnalyserBridge(this.currentBgm);
+
+            // 曲の再生が終了した時のイベントハンドラを設定
+            this.currentBgm.onended = () => {
+                console.log(`[Audio] BGM ended: ${this.currentBgmFileName}`);
+                if (typeof this.onBGMEnded === 'function') {
+                    this.onBGMEnded();
+                }
+            };
 
             this.currentBgm.play().catch(e => console.warn("Autoplay blocked or audio not ready", e));
         } else {
@@ -182,6 +195,7 @@ class AudioManager {
         Object.values(this.bgms).forEach(b => {
             b.pause();
             b.volume = 0.7;
+            b.onended = null; // リスナーの重複・漏れ防止のクリーンアップ
         });
         this.currentBgm = null;
         this.currentBgmFileName = "";
@@ -198,11 +212,11 @@ class AudioManager {
 
         this.fadeInterval = setInterval(() => {
             if (target.volume > volStep) {
-                
                 target.volume -= volStep;
             } else {
                 target.volume = 0;
                 target.pause();
+                target.onended = null;
                 clearInterval(this.fadeInterval);
                 this.fadeInterval = null;
             }
@@ -231,18 +245,28 @@ class AudioManager {
     get seCount() { return this.seKeys.length; }
     getBGMName(idx) { return this.DYNAMIC_BGM_LIST[idx]?.displayName.toUpperCase() || "NONE"; }
     getSEName(idx) { return this.seKeys[idx]?.toUpperCase() || "NONE"; }
+    
     async playBGMByIndex(idx) {
         const bgmData = this.DYNAMIC_BGM_LIST[idx];
         if (!bgmData) return;
         const fileName = bgmData.fileName;
+        
         await this.loadStageBGM(fileName);
+        
+        // サウンドテストの時は自動移行させたいので、一時的に個別ループをOFFにする
+        if (this.bgms[fileName]) {
+            this.bgms[fileName].loop = false;
+        }
+        
         this.playBGM(fileName);
     }
+    
     getByteFrequencyData() {
         if (!this.analyser) return null;
         const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
         this.analyser.getByteFrequencyData(dataArray);
         return dataArray;
     }
+    
     playSEByIndex(idx) { this._playSE(this.seKeys[idx]); }
 }

@@ -40,8 +40,11 @@ class ConfigManager {
 
         this.resetConfirmed = false;
         
-        // 🚨 【新規追加】ピークホールド（イコライザーの頂点の粒）を維持するメモリ配列
+        // ピークホールド（イコライザーの頂点の粒）を維持するメモリ配列
         this.peaks = new Array(32).fill(0);
+
+        // BGMが現在テスト再生中かどうかのフラグ
+        this.isBGMPlaying = false;
     }
 
     /** 設定画面を開く */
@@ -53,13 +56,18 @@ class ConfigManager {
         // 最新のDOM状態を取得
         this.items = Array.from(document.querySelectorAll('.config-item'));
         
-        // イベントの登録（二重登録防止のため一回解除してから登録）
+        // イベントの登録
         this.setupMouseEvents();
         
+        this.isBGMPlaying = false; // 初期状態は停止
         this.refreshAllDisplay();
         this.updateSelection();
 
-        if (this.sc.audio) this.sc.audio.resetBGM();
+        if (this.sc.audio) {
+            this.sc.audio.resetBGM();
+            // オーディオリスナー登録（曲が終了したときの自動次曲遷移用）
+            this.setupAudioEndedListener();
+        }
 
         await this.buildDynamicSoundTestList();
         this.refreshAllDisplay();
@@ -76,7 +84,15 @@ class ConfigManager {
         this.isMode = false;
         this.screenEl.style.display = 'none';
         this.startScreenEl.style.display = 'flex';
-        if (this.sc.audio) this.sc.audio.resetBGM();
+        
+        if (this.sc.audio) {
+            this.sc.audio.resetBGM();
+            // リスナーのクリーンアップ（ゲーム本編への干渉を防ぐ）
+            if (this.sc.audio.bgmNode) {
+                this.sc.audio.bgmNode.onended = null;
+            }
+        }
+        this.isBGMPlaying = false;
         this.peaks.fill(0);
 
         // イコライザー枠を非表示にする
@@ -92,14 +108,40 @@ class ConfigManager {
         }
     }
 
+    /** BGM終了時の自動次曲遷移リスナーを設定 */
+    setupAudioEndedListener() {
+        if (!this.sc.audio) return;        
+        this.sc.audio.onBGMEnded = () => {
+            if (!this.isMode || !this.isBGMPlaying) return;
+            this.playNextBGMAutomated();
+        };
+    }
+
+    /** 自動で次の曲へ移行（7面の次は1面） */
+    playNextBGMAutomated() {
+        const len = this.sc.audio.bgmCount;
+        if (len <= 0) return;
+
+        // 次の曲へ（7面の次は1面、つまり登録数を超えたら0へループ）
+        this.bgmTestIndex = (this.bgmTestIndex + 1) % len;
+        
+        // 自動再生を継続
+        this.isBGMPlaying = true;
+        if (this.sc.audio) {
+            this.sc.audio.playBGMByIndex(this.bgmTestIndex);
+            // 新しく作られたNodeに再度終了イベントが走るよう、AudioManager側で this.onBGMEnded が呼ばれる設計を想定
+        }
+
+        const item = this.items.find(i => i.dataset.setting === 'bgm');
+        if (item) this.refreshDisplay(item);
+    }
+
     /** 動的にサウンドリストを構築 */
     async buildDynamicSoundTestList() {
         const totalStages = 7; // 総ステージ数
         const metaPromises = [];
-
         const base = this.sc.assetBase || "";
 
-        // 全ステージのメタデータ読み込みを並列で走らせる
         for (let i = 1; i <= totalStages; i++) {
             if (this.sc.ScenarioManager) {
                 metaPromises.push(this.sc.ScenarioManager.peekStageMeta(i, base));
@@ -108,7 +150,6 @@ class ConfigManager {
 
         const results = await Promise.all(metaPromises);
         
-        // 有効なBGMが設定されているステージだけをフィルタリングして、AudioManagerにセット
         const validBgmList = results
             .filter(meta => meta && meta.bgm)
             .map(meta => ({
@@ -116,7 +157,6 @@ class ConfigManager {
                 displayName: `ST-${meta.stageNum}: ${meta.name}`
             }));
 
-        // AudioManagerに動的リストを渡す
         if (this.sc.audio) {
             this.sc.audio.setDynamicBGMList(validBgmList);
         }
@@ -149,7 +189,7 @@ class ConfigManager {
         }
     }
 
-    /** 値の変更処理 */
+    /** 値の変更処理 (左右キー) */
     handleValueChange(isRight) {
         const item = this.items[this.currentIndex];
         if (!item) return;
@@ -168,21 +208,28 @@ class ConfigManager {
         } else if (setting === 'bgm') {
             const len = this.sc.audio.bgmCount;
             if (len > 0) {
+                // 左右キーを押した場合は曲の切り替え（再生状態であればそのまま新曲を再生）
                 this.bgmTestIndex = isRight ? (this.bgmTestIndex + 1) % len : (this.bgmTestIndex - 1 + len) % len;
+                if (this.isBGMPlaying) {
+                    if (this.sc.audio) this.sc.audio.playBGMByIndex(this.bgmTestIndex);
+                }
             }
         }
 
         this.refreshDisplay(item);
     }
 
-    /** 決定時のアクション */
+    /** 決定時のアクション (Z/Space または クリック) */
     handleAction() {
         const item = this.items[this.currentIndex];
         if (!item) return;
         const setting = item.dataset.setting;
 
         if (setting === 'sound') this.playBackSoundTest();
-        if (setting === 'bgm') this.playBackBGMTest();
+        if (setting === 'bgm') {
+            // BGM TEST時は決定キーで「再生/停止」をトグル
+            this.toggleBGMTest();
+        }
         if (setting === 'reset_score') {
             if (!this.resetConfirmed) {
                 this.resetConfirmed = true;
@@ -211,7 +258,6 @@ class ConfigManager {
         this.items.forEach(item => {
             item.classList.remove('danger');
             if (item.dataset.setting === 'reset_score') {
-                
                 const valEl = item.querySelector('.value');
                 if (valEl) valEl.innerText = "EXECUTE";
             }
@@ -300,13 +346,28 @@ class ConfigManager {
                     this.updateSelection();
                 }
                 const setting = item.dataset.setting;
-                if (this.OPTIONS[setting] || setting === 'sound' || setting === 'bgm') {
+                
+                // 🛠 【核心の修正】BGM項目のクリック処理
+                if (setting === 'bgm') {
+                    if (!this.isBGMPlaying) {
+                        // 1. 停止中の場合は「現在の曲を再生」
+                        this.isBGMPlaying = true;
+                        if (this.sc.audio) this.sc.audio.playBGMByIndex(this.bgmTestIndex);
+                        this.showEqualizerContainer();
+                    } else {
+                        // 2. 再生中の場合は「インデックスを進めて次の曲を再生」
+                        const len = this.sc.audio ? this.sc.audio.bgmCount : 0;
+                        if (len > 0) {
+                            this.bgmTestIndex = (this.bgmTestIndex + 1) % len;
+                            if (this.sc.audio) this.sc.audio.playBGMByIndex(this.bgmTestIndex);
+                        }
+                    }
+                    this.refreshDisplay(item);
+
+                } else if (this.OPTIONS[setting] || setting === 'sound') {
                     this.handleValueChange(true);
                     if (setting === 'sound') this.playBackSoundTest();
-                    if (setting === 'bgm') this.playBackBGMTest();
-                    if (this.sc.audio && setting !== 'bgm' && setting !== 'sound') {
-                        this.sc.audio.playHitSound();
-                    }
+                    if (this.sc.audio) this.sc.audio.playHitSound();
                 } else {
                     this.handleAction();
                 }
@@ -321,99 +382,93 @@ class ConfigManager {
         });
     }
 
-    /** 音源テスト系 */
     playBackSoundTest() { if (this.sc.audio) this.sc.audio.playSEByIndex(this.soundTestIndex); }
-    playBackBGMTest() {
-        if (this.sc.audio) {
+
+    /** BGMの再生・停止をトグル制御する関数（キーボード操作用） */
+    toggleBGMTest() {
+        if (!this.sc.audio) return;
+
+        this.isBGMPlaying = !this.isBGMPlaying;
+
+        if (this.isBGMPlaying) {
             this.sc.audio.playBGMByIndex(this.bgmTestIndex);
-            const eqContainer = document.getElementById('eq-container');
-            if (eqContainer) {
-                eqContainer.style.display = 'block';
-                setTimeout(() => { eqContainer.style.opacity = '1'; }, 10);
-            }
+            this.showEqualizerContainer();
+        } else {
+            this.sc.audio.resetBGM();
+        }
+
+        const item = this.items.find(i => i.dataset.setting === 'bgm');
+        if (item) this.refreshDisplay(item);
+    }
+
+    /** イコライザーコンテナを表示するヘルパー */
+    showEqualizerContainer() {
+        const eqContainer = document.getElementById('eq-container');
+        if (eqContainer) {
+            eqContainer.style.display = 'block';
+            setTimeout(() => { eqContainer.style.opacity = '1'; }, 10);
         }
     }
 
-    /** レトロコンポーネント風スペクトラムアナライザー描画 */
     drawEqualizer(ctx, x, y) {
         if (!this.sc.audio || !this.sc.audio.getByteFrequencyData) return;
-
         const rawData = this.sc.audio.getByteFrequencyData();
         if (!rawData) return;
 
         const targetIndices = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         const activeCount = targetIndices.length; 
-
         const canvasWidth = ctx.canvas.width;
-        const maxHeight = ctx.canvas.height; // 50px
-
+        const maxHeight = ctx.canvas.height;
         const barGap = 4; 
         const barWidth = (canvasWidth - (barGap * (activeCount - 1))) / activeCount;
 
         ctx.save();
-
         for (let i = 0; i < activeCount; i++) {
             const rawIdx = targetIndices[i];
             let rawValue = rawData[rawIdx];
-
             let processedValue = ((rawValue - 140 + (rawIdx * 6)) * 2);
             processedValue = Math.max(0, Math.min(255, processedValue));
             let barHeight = (processedValue / 255) * maxHeight;
 
-            // 最終セーフティ：天井・底の突き抜け防止
             if (rawValue > 10) {
                 barHeight = Math.max(2, Math.min(maxHeight - 4, barHeight));
             } else {
-                barHeight = 1;  // 音が完全に消えた時は、1pxだけドットを残して通電感を出す
+                barHeight = 1;
             }
 
             ctx.fillStyle = `rgb(255, ${150 + (i * 7.5)}, 0)`;
             const barX = x + i * (barWidth + barGap);
             const barY = y + maxHeight - barHeight;
 
-            // メインバーの描画
-            if (barHeight > 0) {
-                ctx.fillRect(barX, barY, barWidth, barHeight);
-            }
+            if (barHeight > 0) ctx.fillRect(barX, barY, barWidth, barHeight);
 
-            // ピークホールドのフワッと落下演出（ここが一番綺麗に見える絶妙な速度です）
             if (barHeight >= this.peaks[i]) {
                 this.peaks[i] = barHeight;
             } else {
                 this.peaks[i] = Math.max(0, this.peaks[i] - 0.45); 
             }
 
-            // ピークドットの描画
             if (this.peaks[i] > 0) {
                 ctx.fillStyle = "rgba(255, 255, 220, 0.95)";
                 ctx.fillRect(barX, y + maxHeight - this.peaks[i], barWidth, 2);
             }
 
-            // 横シールドスリット（レトロ液晶の再現）
             ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
             for (let h = 0; h < maxHeight; h += 4) {
                 ctx.fillRect(barX, y + h, barWidth + 1, 1);
             }
         }
-
         ctx.restore();
     }
 
-    /** 設定セーブ */
     saveConfig() {
-        const configData = {
-            difficulty: this.difficulty,
-            lives: this.lives,
-            extend: this.extend
-        };
+        const configData = { difficulty: this.difficulty, lives: this.lives, extend: this.extend };
         localStorage.setItem('void_circuit_config', JSON.stringify(configData));
     }
 
-    /** 設定ロード */
     loadConfig() {
         const saved = localStorage.getItem('void_circuit_config');
         if (!saved) return;
-
         try {
             const data = JSON.parse(saved);
             this.difficulty = this.OPTIONS.difficulty.includes(data.difficulty) ? data.difficulty : this.OPTIONS.difficulty[1];
@@ -424,6 +479,7 @@ class ConfigManager {
             console.error("Config corruption detected. Resetting to defaults.", e);
         }
     }
+
     startLoop() {
         if (!this.isMode || !this.eqCtx) return;
         this.eqCtx.clearRect(0, 0, this.eqCtx.canvas.width, this.eqCtx.canvas.height);
