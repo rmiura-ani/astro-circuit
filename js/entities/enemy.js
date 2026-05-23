@@ -106,7 +106,7 @@ class Enemy extends Entity {
     draw(ctx, isInvincibleCheat = false) {
         ctx.save();
 
-        // 当たり判定スキップと完全に同じ条件（画面外、または上部30pxのHUDエリア内）
+        // 当たり判定スキップと完全に同じ条件（画面外、または上部のHUDエリア内）
         if (
             this.y + this.height < GAME_CONFIG.UI_HEADER_HEIGHT ||
             this.y >= GAME_CONFIG.HEIGHT ||

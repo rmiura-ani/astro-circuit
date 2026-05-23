@@ -23,7 +23,6 @@
     <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
 </head>
 
-<!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-KJJQ5E61FL"></script>
 <script>
 window.dataLayer = window.dataLayer || [];
@@ -40,7 +39,7 @@ gtag('config', 'G-KJJQ5E61FL');
 
     <div id="start-screen" class="screen">
         <div id="title-content">
-            <h1>PROJECT:<br>VOID-CIRCUIT</h2>
+            <h1>PROJECT:<br>VOID-CIRCUIT</h1>
             <p class="blink">Loading Assets...</p>
         </div>
         <div id="config-open-btn">
@@ -159,10 +158,27 @@ gtag('config', 'G-KJJQ5E61FL');
                 <span>BGM TEST</span>
                 <span class="value">< LOADING... ></span>
             </div>
+            <div class="config-item" data-setting="audio_room">
+                <span>AUDIO ROOM</span>
+                <span class="value">< LOADING... ></span>
+            </div>
             <BR>
             <div class="config-item" data-setting="reset_score">
                 <span>HI-SCORE RESET</span>
                 <span class="value">EXECUTE</span>
+            </div>
+            <BR>
+            <div class="config-item" data-setting="eq_low">
+                <span class="label">EQ LOW FREQ</span>
+                <span class="value">0 dB</span>
+            </div>
+            <div class="config-item" data-setting="eq_mid">
+                <span class="label">EQ MID FREQ</span>
+                <span class="value">0 dB</span>
+            </div>
+            <div class="config-item" data-setting="eq_high">
+                <span class="label">EQ HIGH FREQ</span>
+                <span class="value">0 dB</span>
             </div>
             <BR>
             <div class="config-item" data-setting="exit">
@@ -183,7 +199,8 @@ gtag('config', 'G-KJJQ5E61FL');
 
 <script src="js/constants.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
-<script src="js/config.js"></script>
+<script src="js/config/soundTest.js"></script>
+<script src="js/config/config.js"></script>
 <script src="js/systems/scenario.js"></script>
 <script src="js/systems/input.js"></script>
 <script src="js/systems/audio.js"></script>

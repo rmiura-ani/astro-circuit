@@ -534,17 +534,13 @@ class Game {
         if (this.sc.audio) this.sc.audio.playExplosion();
         const px = this.player.x + this.player.halfWidth;
         const py = this.player.y + this.player.halfHeight;
+        for (let i = 0; i < 30; i++) {
+            this.particles.push(new Particle(px, py, 'player'));
+        }
 
         if (this.isInvincibleCheat){
-            for (let i = 0; i < 1; i++) {
-                this.particles.push(new Particle(px, py, 'player'));
-            }
             this.player.setInvincible();
             return; //無敵
-        } else {
-            for (let i = 0; i < 30; i++) {
-                this.particles.push(new Particle(px, py, 'player'));
-            }
         }
         this.player.alive = false;
         this.respawnTimer = 0;      

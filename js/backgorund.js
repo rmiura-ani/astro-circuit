@@ -131,7 +131,7 @@ class Stage2Background extends StageBackground {
             }
         });
 
-        if (frame % 40 === 0) {
+        if (frame % 20 === 0) {
             this.ripples.push({
                 x: Math.random() * this.width,
                 y: Math.random() * this.height,
