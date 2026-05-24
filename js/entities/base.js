@@ -237,7 +237,7 @@ class AssetManager {
         if (this.imageCache[key]) {
             return this.imageCache[key];
         }
-        if (!key || key.includes("LOOP") || !key.includes(".")) {
+        if (!key || key.includes("LOOP") || key.includes("BOSS_TRIGGER") || !key.includes(".")) {
             return Promise.resolve(null);
         }
         // 2. まだロードが始まっていない初見の画像の場合、非同期ロードを裏で開始する
@@ -267,10 +267,8 @@ class AssetManager {
         return null; 
     }
 
-    /**
-     * 自機など、ゲーム開始時に「絶対に最初から画面にいないと困るもの」だけを
-     * 事前にロードしておきたい場合に使用するセーフティメソッド
-     * @param {string[]} keys プリロードしたいアセット名の配列
+    /** 自機など、ゲーム開始時に「絶対に最初から画面にいないと困るもの」だけを
+     * 事前にロードしておきたい場合に使用するセーフティメソッド *\
      */
     async preload(keys) {
         // すべてを get() に丸投げして、そのロード完了を待つ

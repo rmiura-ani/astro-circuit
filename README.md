@@ -70,7 +70,7 @@ name: "Iron Vein"
 bgm: "bgm-stage1.ogg"
 bgColor: "#000000"
 version: "0.2"
-enemies:
+scenario:
   - { frame: 60,  x: 60,  type: "straight", hp: 1, bulletType: "straight" }
   - { frame: 500, x: 160, type: "boss_01", hp: 100 }
   - { frame: 9999, type: "LOOP_END", returnTo: 500 } # ボス戦無限湧きループ制御

@@ -39,11 +39,9 @@ class ScenarioManager {
             // メタデータの抽出
             this.stageName = data.name || "Unknown Stage";
             this.bgm = data.bgm || "";
-
+            this.kv = data.kv || "";
             // 敵データの抽出とソート
-            // data.enemies があればそれを、なければデータ自体を配列として扱う
-            const rawEnemies = Array.isArray(data.enemies) ? data.enemies : (Array.isArray(data) ? data : []);
-            this.scenario = rawEnemies.sort((a, b) => a.frame - b.frame);
+            this.scenario =  data.scenario.sort((a, b) => a.frame - b.frame);
             
             this.scenarioName = scenarioName;
 
@@ -51,6 +49,54 @@ class ScenarioManager {
             return true;
         } catch (e) {
             console.error("[System] Scenario Load Failed:", e);
+            return false;
+        }
+    }
+
+    async loadStageResources(stageNum, assetManager, audioManager, assetBase = 'assets/', branch = 'main') {
+        const fileName = `stage-${stageNum}/scenario.yaml`;
+        const scenarioPath = `${assetBase}${fileName}`;
+
+        try {
+            // 1. シナリオYAML自体のロード
+            const loadSuccess = await this.loadScenario(scenarioPath, branch);
+            if (!loadSuccess) throw new Error("Scenario YAML load returned false.");
+
+            // 2. enemies配下から出現する敵の種類を自動スキャン
+            const enemyData = this.enemies || this.scenario || []; 
+            const enemyTypes = enemyData.map(e => e.type).filter(Boolean);
+            const uniqueTypes = [...new Set(enemyTypes)];
+
+            // 敵の基本画像を配列化 (boss_01 -> enemy_boss_01.webp)
+            const imagesToPreload = uniqueTypes.map(type => `enemy_${type}.webp`);
+
+            // 3. YAML直書きの固有追加アセット（7面ボス等のマルチフェーズ画像）をマージ
+            if (Array.isArray(this.preloadAssets)) {
+                imagesToPreload.push(...this.preloadAssets);
+            }
+
+            // 4. カッコいいオブジェクト形式のKV（キービジュアル）画像の追加
+            if (this.kv) {
+                const kvPath = typeof this.kv === 'object' ? this.kv.path : this.kv;
+                if (kvPath) {
+                    imagesToPreload.push(kvPath);
+                }
+            }
+
+            // 5. 既存の AssetManager を使って一括プリロードを実行
+            const finalImages = [...new Set(imagesToPreload)];
+            if (finalImages.length > 0) {
+                await assetManager.preload(finalImages); 
+            }
+
+            // 6. 既存の AudioManager を使ってBGMをロード
+            if (this.bgm) {
+                await audioManager.loadStageBGM(this.bgm);
+            }            
+
+            return true;
+        } catch (error) {
+            console.error(`[ScenarioManager] Failed to load resources for stage ${stageNum}:`, error);
             return false;
         }
     }
@@ -142,6 +188,7 @@ class ScenarioManager {
         this.scenario = [];
         this.stageName = "";
         this.bgm = "";
+        this.kv = "";
         this.scenarioName = "UNKNOWN";
 
         this.currentIndex = 0;

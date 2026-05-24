@@ -229,7 +229,7 @@ class Game {
         setTimeout(() => { container.style.filter = ""; }, 150);
     }
 
-    /** メインループ表示更新 */
+     /** メインループ表示更新 */
     update() {
         this.background.update(this.frame);
         if (!this.isRunning) return;
@@ -243,10 +243,10 @@ class Game {
             this.checkClearCondition();
             this.updateInputMode();
             
-            // 💡 スコアかすり・撃ち込み得点の同期（ショットキー押下状態をPlayerのプロパティから取得）
+            // 💡 スコアかすり・撃ち込み得点の同期
             const isFiring = this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isTouching;
             if (this.frame % 5 === 0 && !this.isBossActive) {
-                this.score += isFiring ? 20 : 30;   
+                    this.score += isFiring ? 20 : 30;   
             }
         }
         
@@ -593,37 +593,87 @@ class Game {
         this.ctx.font = '16px "Press Start 2P", cursive';
         this.ctx.textAlign = 'center';
 
-        // ステージ開始時のタイトル表示
-        if (this.frame > 0 && this.frame < 180) {
-            let alpha = 1.0;
-            if (this.frame <= 30) alpha = this.frame / 30;
-            else if (this.frame > 120) alpha = (180 - this.frame) / 60;
+        // --- 💡 [改修] 新しい形式からパスと演出時間を抽出 ---
+        let kvPath = null;
+        let kvDuration = 180;
 
-            this.ctx.font = '14px "Press Start 2P", cursive';
-            this.ctx.fillStyle = `rgba(0, 255, 255, ${alpha})`;
-            this.ctx.fillText(`STAGE ${this.currentStageNum}`, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2 - 10);
-            this.ctx.font = '10px "Press Start 2P", cursive';
-            this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-            this.ctx.fillText(this.ScenarioManager.stageName, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2 + 20);
+        if (this.ScenarioManager.kv) {
+            if (typeof this.ScenarioManager.kv === 'object') {
+                kvPath = this.ScenarioManager.kv.path;
+                kvDuration = this.ScenarioManager.kv.duration || 180;
+            } else {
+                // 万が一、古い記述（文字列だけ）が残っていても動くようにケア
+                kvPath = this.ScenarioManager.kv;
+            }
         }
 
-        // ゲームオーバー演出
-        if (!this.player.alive && this.currentLives <= 0) {
-            this.ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-            this.ctx.fillRect(0, GAME_CONFIG.HEIGHT / 2 - 50, GAME_CONFIG.WIDTH, 100);
-            this.ctx.fillStyle = '#FFF';
-            this.ctx.fillText('GAME OVER', GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2);
+        if (this.frame > 0 && this.frame < kvDuration) {
+            
+            // 1. 文字用のアルファ計算 (最初と最後の30Fでフェード)
+            let textAlpha = 1.0;
+            if (this.frame <= 30) textAlpha = this.frame / 30;
+            else if (this.frame > (kvDuration - 30)) textAlpha = (kvDuration - this.frame) / 30;
+
+            // 2. KV画像の演出描画
+            if (kvPath && this.assets) {
+                const kvImage = this.assets.get?.(kvPath) || this.assets[kvPath];
+                
+                if (kvImage && kvImage.complete) {
+                    this.ctx.save();
+
+                    // 進捗率の計算
+                    const progress = this.frame / kvDuration;
+
+                    // 画像用アルファ (最初の25Fでイン、ラスト45Fでアウト)
+                    let kvAlpha = 1.0;
+                    if (this.frame <= 25) kvAlpha = this.frame / 25;
+                    else if (this.frame > (kvDuration - 45)) kvAlpha = Math.max(0, (kvDuration - this.frame) / 45);
+
+                    // 横幅フィットの計算
+                    const baseWidth = GAME_CONFIG.WIDTH;
+                    const baseHeight = kvImage.height * (GAME_CONFIG.WIDTH / kvImage.width);
+
+                    // じわじわ等倍に収束するズーム演出
+                    const scale = 1.12 - (progress * 0.12); 
+                    const drawWidth = baseWidth * scale;
+                    const drawHeight = baseHeight * scale;
+                    
+                    // 自機を避けるための上部寄せ配置
+                    const drawX = (GAME_CONFIG.WIDTH - drawWidth) / 2;
+                    const drawY = (GAME_CONFIG.HEIGHT * 0.35) - (drawHeight / 2);
+
+                    // スクリーン合成＆シネマティック暗転
+                    this.ctx.globalCompositeOperation = 'screen';
+                    this.ctx.globalAlpha = Math.max(0, kvAlpha);
+
+                    if (kvAlpha > 0) {
+                        this.ctx.save();
+                        this.ctx.globalCompositeOperation = 'source-over';
+                        this.ctx.globalAlpha = kvAlpha * 0.6;
+                        this.ctx.fillStyle = '#000000';
+                        this.ctx.fillRect(0, 0, GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT);
+                        this.ctx.restore();
+                    }
+
+                    this.ctx.drawImage(kvImage, drawX, drawY, drawWidth, drawHeight);
+                    this.ctx.globalCompositeOperation = 'source-over';
+                    this.ctx.restore();
+                }
+            }
+
+            // 3. タイトルテキストの描画 (画面下部、自機より上の安全圏)
+            const textCenterY = GAME_CONFIG.HEIGHT * 0.65;
+
+            this.ctx.font = '16px "Press Start 2P", cursive';
+            this.ctx.fillStyle = `rgba(0, 255, 255, ${textAlpha})`;
+            this.ctx.fillText(`STAGE ${this.currentStageNum}`, GAME_CONFIG.WIDTH / 2, textCenterY);
+            
+            this.ctx.font = '11px "Press Start 2P", cursive';
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${textAlpha})`;
+            this.ctx.fillText(this.ScenarioManager.stageName, GAME_CONFIG.WIDTH / 2, textCenterY + 30);
         }
 
-        // ステージクリア演出
-        if (this.isCleared) {
-            const stageNameStr = this.ScenarioManager.stageName; 
-            this.ctx.fillStyle = '#0FF';
-            this.ctx.fillText(`STAGE ${this.currentStageNum} CLEAR`, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2);            
-            this.ctx.font = '10px "Press Start 2P", cursive';
-            this.ctx.fillStyle = '#FFF';
-            this.ctx.fillText(stageNameStr, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2 + 30);
-        }
+        // （ゲームオーバー、クリア処理は省略）
         this.ctx.restore();
     }
 
