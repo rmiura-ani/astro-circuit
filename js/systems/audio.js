@@ -78,6 +78,19 @@ class AudioManager {
             const methodName = 'play' + key.charAt(0).toUpperCase() + key.slice(1);
             this[methodName] = () => this._playSE(key);
         });
+        this.initSEAudio();
+    }
+
+    /** SE初期化 */
+    initSEAudio() {
+        this.seKeys.forEach(key => {
+            const conf = this.CONFIG.SE[key];
+            const audio = new Audio(this.basePath + conf.file);
+            audio.crossOrigin = "anonymous";
+            // 🌟 初期化時にも【マスター音量 × 固有音量】を掛け算してセット
+            audio.volume = conf.vol * this.seVolume;
+            this.sounds[key] = audio;
+        });
     }
 
     /** Controllerから動的に構築されたBGMリストを受け取る */
@@ -107,21 +120,9 @@ class AudioManager {
         }
         console.log(`[Audio] Master BGM Volume -> ${Math.round(volume * 100)}%`);
     }
-
-    /** SE初期化 */
-    initAudio() {
-        this.seKeys.forEach(key => {
-            const conf = this.CONFIG.SE[key];
-            const audio = new Audio(this.basePath + conf.file);
-            audio.crossOrigin = "anonymous";
-            // 🌟 初期化時にも【マスター音量 × 固有音量】を掛け算してセット
-            audio.volume = conf.vol * this.seVolume;
-            this.sounds[key] = audio;
-        });
-    }
     
     /** 起動時のSEプリロード */
-    async preloadAll() {
+    async preloadSE() {
         const loadAud = (a) => new Promise(r => {
             if (!a || a.readyState >= 3) return r();
             a.addEventListener('canplaythrough', r, { once: true });

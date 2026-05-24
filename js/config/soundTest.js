@@ -22,32 +22,53 @@ class SoundTestManager {
         this.peaks = new Array(32).fill(0);
     }
 
-    /** 動的にサウンドリストを構築 */
-    async buildDynamicSoundTestList() {
-        const totalStages = 7; 
-        const metaPromises = [];
-        const base = this.sc.assetBase || "";
+         /** 動的にサウンドリストを構築 */
+        async buildDynamicSoundTestList() {
+            const totalStages = 7; 
+            const metaPromises = [];
+            const base = this.sc.assetBase || "";
 
-        for (let i = 1; i <= totalStages; i++) {
-            if (this.sc.ScenarioManager) {
-                metaPromises.push(this.sc.ScenarioManager.peekStageMeta(i, base));
+            // ✨ その場で ScenarioManager を生成して使い捨てる
+            const scenario = new ScenarioManager();
+
+            // 1. STAGE-1 から 7 までのメタデータ（BGM名など）を非同期で一斉に取得
+            for (let i = 1; i <= totalStages; i++) {
+                metaPromises.push(scenario.peekStageMeta(i, base));
             }
+
+            const results = await Promise.all(metaPromises); 
+            
+            // 2. 取得できたデータから、BGMが設定されているものだけを抽出してリスト化
+            const validBgmList = results
+                .filter(meta => meta && meta.bgm)
+                .map(meta => ({
+                    fileName: meta.bgm,
+                    displayName: `${meta.name}`
+                }));
+
+            if (validBgmList.length === 0) {
+                console.warn("[SoundTest] WARNING: No stage YAMLs returned valid BGM data.");
+                return;
+            }
+
+            // 3. 抽出したBGMファイルをその場で一括して「同期ロード」
+            if (!this.sc.audio) {
+                console.error("[SoundTest] ERROR: Audio manager (this.sc.audio) is missing!");
+                return;
+            }
+
+            try {
+                // Promise.all で全曲のロードを並列で走らせ、すべて完了するのを待つ
+                const loadPromises = validBgmList.map(bgm => this.sc.audio.loadStageBGM(bgm.fileName));
+                await Promise.all(loadPromises);
+            } catch (error) {
+                console.error("[SoundTest] CRITICAL: One or more files failed to load via loadStageBGM:", error);
+            }
+
+            // 4. オーディオマネージャー側に動的リストを認識させる
+            this.sc.audio.setDynamicBGMList(validBgmList);            
         }
-
-        const results = await Promise.all(metaPromises); 
-        
-        const validBgmList = results
-            .filter(meta => meta && meta.bgm)
-            .map(meta => ({
-                fileName: meta.bgm,
-                displayName: `${meta.name}`
-            }));
-
-        if (this.sc.audio) {
-            this.sc.audio.setDynamicBGMList(validBgmList);
-        }
-    }
-
+    
     /** SEの選択インデックスを変更 */
     changeSEIndex(isRight) {
         if (!this.sc.audio) return;

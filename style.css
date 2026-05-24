@@ -311,6 +311,11 @@ canvas {
     margin-top: 10px;
 }
 
+/config-menu .menu-space {
+    height: 20px; /* 元の<BR>と同じくらいの好みの高さに調整してください */
+    transition: height 0.4s ease;
+}
+
 #config-open-btn {
     position: absolute;
     bottom: 4cqw;
@@ -343,6 +348,11 @@ canvas {
     overflow: hidden; 
 }
 
+#config-menu .menu-space {
+    height: 20px; /* 元の<BR>と同じくらいの好みの高さに調整してください */
+    transition: height 0.4s ease;
+}
+
 /* ホバー・アクティブ状態 */
 .config-item:hover {
     background: rgba(255, 255, 255, 0.2);
@@ -368,18 +378,12 @@ canvas {
     animation: blink-fast-anim 0.2s infinite; /* 高速点滅を確実に適用 */
 }
 
-
-/* ──────────────────────────────────────────────────────────────────────────
-   🎛️ EQ項目専用（お気に入りフォントのまま、左右矢印の位置を完全固定）
-   ────────────────────────────────────────────────────────────────────────── */
 .config-item .inner-val {
     display: inline-block;
     width: 5.5rem;        
     text-align: center;   
     font-variant-numeric: tabular-nums; /* 数字・符号の道連れズレを防止 */
-    -webkit-font-feature-settings: "tnum";
 }
-
 
 /* ──────────────────────────────────────────────────────────────────────────
    🎵 AUDIO EQUALIZER CONTAINER & BGM TITLE (同期表示システム)
@@ -446,6 +450,10 @@ canvas {
     height: 20.0cqw; 
 }
 
+/* EQ各バンドの文字色（機材感演出） */
+.eq-label-low  { color: #ff4500; font-weight: bold; }
+.eq-label-mid  { color: #39ff14; font-weight: bold; }
+.eq-label-high { color: #00ffff; font-weight: bold; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    🔄 BGM TEST 実行中のレイアウト変形（メニューの開閉アニメーション）
@@ -511,10 +519,10 @@ canvas {
     box-sizing: border-box;
 }
 
-/* EQ各バンドの文字色（機材感演出） */
-.eq-label-low  { color: #ff4500; font-weight: bold; }
-.eq-label-mid  { color: #39ff14; font-weight: bold; }
-.eq-label-high { color: #00ffff; font-weight: bold; }
+#config-screen.bgm-testing-mode #config-menu .menu-space {
+    height: 0px;
+    overflow: hidden; /* 中身がはみ出ないように念のため */
+}
 
 /* ==========================================================================
    [SECTION-CREDIT] : STAFF ROLL (スタッフロール画面)

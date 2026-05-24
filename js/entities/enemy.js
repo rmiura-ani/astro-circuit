@@ -161,7 +161,7 @@ class Enemy extends Entity {
     onDie(game) {
         const centerX = this.x + this.width / 2;
         const centerY = this.y + this.height / 2;
-        game.createExplosion(centerX, centerY, this);
+        game.collisions.createExplosion(centerX, centerY, this);
     }
 }
 
@@ -442,7 +442,7 @@ class BossEnemy_01 extends BossEnemy {
     onDie(game) {
         for (let i = 0; i < 5; i++) {
             setTimeout(() => {
-                game.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 50 });
+                game.collisions.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 50 });
             }, i * 200);
         }
     }
@@ -534,7 +534,7 @@ class BossEnemy_02 extends BossEnemy {
     onDie(game) {
         for (let i = 0; i < 8; i++) {
             setTimeout(() => {
-                game.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 80 });
+                game.collisions.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 80 });
             }, i * 150);
         }
     }
@@ -620,7 +620,7 @@ class BossEnemy_03 extends BossEnemy {
     onDie(game) {
         for (let i = 0; i < 12; i++) {
             setTimeout(() => {
-                game.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 100 });
+                game.collisions.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 100 });
             }, i * 100);
         }
     }
@@ -694,7 +694,7 @@ class BossEnemy_04 extends BossEnemy {
     onDie(game) {
         for (let i = 0; i < 10; i++) {
             setTimeout(() => {
-                game.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 120 });
+                game.collisions.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 120 });
             }, i * 120);
         }
     }
@@ -778,7 +778,7 @@ class BossEnemy_05 extends BossEnemy {
     onDie(game) {
         for (let i = 0; i < 14; i++) {
             setTimeout(() => {
-                game.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 110 });
+                game.collisions.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 110 });
             }, i * 90);
         }
     }
@@ -862,7 +862,7 @@ class BossEnemy_06 extends BossEnemy {
         // 巨大戦艦崩壊の、鳴り止まない大誘爆演出
         for (let i = 0; i < 24; i++) {
             setTimeout(() => {
-                game.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 150 });
+                game.collisions.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 150 });
             }, i * 80);
         }
     }
@@ -972,7 +972,7 @@ class BossEnemy_07 extends BossEnemy {
         // 機械心臓が完全停止。ゲーム全体の画面を震撼させるグランドフィナーレの大爆発
         for (let i = 0; i < 40; i++) {
             setTimeout(() => {
-                game.createExplosion(
+                game.collisions.createExplosion(
                     this.x - 20 + Math.random() * (this.width + 40), 
                     this.y - 20 + Math.random() * (this.height + 40), 
                     { maxHp: 200 }

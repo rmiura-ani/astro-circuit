@@ -17,11 +17,11 @@ class ScenarioManager {
         this.reset();
     }
 
-    /** YAMLシナリオファイルをロード */
-    async loadScenario(path, scenarioName) {
-        try {
-            this.scenarioName = scenarioName;
+    get length() { return this._scenario.length; }
 
+    /** YAMLシナリオファイルをロード */
+    async loadScenario(path) {
+        try {
             const res = await fetch(path);
             if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
             
@@ -43,9 +43,9 @@ class ScenarioManager {
             this.bgm = data.bgm || "";
             this.kv = data.kv || "";
             // 敵データの抽出とソート
-            this.scenario =  data.scenario.sort((a, b) => a.frame - b.frame);
+            this._scenario =  data.scenario.sort((a, b) => a.frame - b.frame);
             
-            console.log(`[System] YAML Scenario "${path}" loaded. (${this.scenario.length} events)`);
+            console.log(`[System] YAML Scenario "${path}" loaded. (${this._scenario.length} events)`);
             return true;
         } catch (e) {
             console.error("[System] Scenario Load Failed:", e);
@@ -53,53 +53,79 @@ class ScenarioManager {
         }
     }
 
-    async loadStageResources(stageNum, assetManager, audioManager, assetBase = 'assets/', branch = 'main') {
-        const fileName = `stage-${stageNum}/scenario.yaml`;
-        const scenarioPath = `${assetBase}${fileName}`;
+async loadStageResources(stageNum, assetManager, audioManager, assetBase) {
+    const fileName = `stage-${stageNum}/scenario.yaml`;
+    const scenarioPath = `${assetBase}${fileName}`;
+    
+    // ✨ 新しいロードが始まるので、前回の残ったエラーをクリアする
+    this.lastError = null; 
 
-        try {
-            // 1. シナリオYAML自体のロード
-            const loadSuccess = await this.loadScenario(scenarioPath, branch);
-            if (!loadSuccess) throw new Error("Scenario YAML load returned false.");
+    try {
+        // 1. シナリオYAML自体のロード
+        const loadSuccess = await this.loadScenario(scenarioPath);
+        // 💡 どこで落ちたか分かりやすくするため、エラーメッセージを具体的に記載
+        if (!loadSuccess) throw new Error(`Failed to load scenario file: "${fileName}"`);
 
-            // 2. enemies配下から出現する敵の種類を自動スキャン
-            const enemyData = this.enemies || this.scenario || []; 
-            const enemyTypes = enemyData.map(e => e.type).filter(Boolean);
-            const uniqueTypes = [...new Set(enemyTypes)];
+        // 2. scenario配下から出現する敵の種類を自動スキャン
+        const enemyData = this._scenario; 
+        const enemyTypes = enemyData.map(e => e.type).filter(Boolean);
+        const uniqueTypes = [...new Set(enemyTypes)];
 
-            // 敵の基本画像を配列化 (boss_01 -> enemy_boss_01.webp)
-            const imagesToPreload = uniqueTypes.map(type => `enemy_${type}.webp`);
+        // 敵の基本画像を配列化 (boss_01 -> enemy_boss_01.webp)
+        const imagesToPreload = uniqueTypes.map(type => `enemy_${type}.webp`);
 
-            // 3. YAML直書きの固有追加アセット（7面ボス等のマルチフェーズ画像）をマージ
-            if (Array.isArray(this.preloadAssets)) {
-                imagesToPreload.push(...this.preloadAssets);
-            }
-
-            // 4. カッコいいオブジェクト形式のKV（キービジュアル）画像の追加
-            if (this.kv) {
-                const kvPath = typeof this.kv === 'object' ? this.kv.path : this.kv;
-                if (kvPath) {
-                    imagesToPreload.push(kvPath);
-                }
-            }
-
-            // 5. 既存の AssetManager を使って一括プリロードを実行
-            const finalImages = [...new Set(imagesToPreload)];
-            if (finalImages.length > 0) {
-                await assetManager.preload(finalImages); 
-            }
-
-            // 6. 既存の AudioManager を使ってBGMをロード
-            if (this.bgm) {
-                await audioManager.loadStageBGM(this.bgm);
-            }            
-
-            return true;
-        } catch (error) {
-            console.error(`[ScenarioManager] Failed to load resources for stage ${stageNum}:`, error);
-            return false;
+        // 3. YAML直書きの固有追加アセットをマージ
+        if (Array.isArray(this.preloadAssets)) {
+            imagesToPreload.push(...this.preloadAssets);
         }
+
+        // 4. キービジュアル画像の追加
+        if (this.kv) {
+            const kvPath = typeof this.kv === 'object' ? this.kv.path : this.kv;
+            if (kvPath) {
+                imagesToPreload.push(kvPath);
+            }
+        }
+
+        // 5. 既存の AssetManager を使って一括プリロードを実行
+        const finalImages = [...new Set(imagesToPreload)];
+        if (finalImages.length > 0) {
+            try {
+                await assetManager.preload(finalImages); 
+            } catch (assetError) {
+                // 💡 画像ロード自体のエラーをラップして原因を絞り込む
+                throw new Error(`Image asset preload failed. (Check files: ${finalImages.slice(0, 3).join(', ')}...)`);
+            }
+        }
+
+        // 6. 既存の AudioManager を使ってBGMをロード
+        if (this.bgm) {
+            try {
+                await audioManager.loadStageBGM(this.bgm);
+            } catch (audioError) {
+                throw new Error(`BGM load failed: "${this.bgm}"`);
+            }
+        }            
+
+        // 7. 既存の AudioManager を使ってシステムSEを一括プリロード
+        if (audioManager && typeof audioManager.preloadSE === 'function') {
+            try {
+                await audioManager.preloadSE();
+            } catch (seError) {
+                throw new Error(`SE preload failed. Check audio system.`);
+            }
+        }
+
+        return true;
+    } catch (error) {
+        console.error(`[ScenarioManager] Failed to load resources for stage ${stageNum}:`, error);
+        
+        // ✨ ここで catch した error のメッセージをインスタンスに保存します！
+        this.lastError = error.message; 
+        
+        return false;
     }
+}
 
     /** サウンドテスト用：特定のステージのYAMLからBGM名とステージ名だけをピンポイントで取得する */
     async peekStageMeta(stageNum, assetBase) {
@@ -132,17 +158,17 @@ class ScenarioManager {
 
     /** 更新 */
     update(gameFrame, game) {
-        if (this.isFinished || this.scenario.length === 0) return;
+        if (this.isFinished || this._scenario.length === 0) return;
 
         // シナリオ内フレームを進める
         this.currentScenarioFrame++;
 
         // 現在のインデックスから、指定フレームに到達したイベントを処理
         while (
-            this.currentIndex < this.scenario.length && 
-            this.scenario[this.currentIndex].frame <= this.currentScenarioFrame
+            this.currentIndex < this._scenario.length && 
+            this._scenario[this.currentIndex].frame <= this.currentScenarioFrame
         ) {
-            const data = this.scenario[this.currentIndex];
+            const data = this._scenario[this.currentIndex];
 
             // 特殊イベント「LOOP_END」の判定
             if (data.type === 'LOOP_END') {
@@ -158,7 +184,7 @@ class ScenarioManager {
             this.currentIndex++;
         }
 
-        if (this.currentIndex >= this.scenario.length) {
+        if (this.currentIndex >= this._scenario.length) {
             this.isFinished = true;
         }
     }
@@ -166,7 +192,7 @@ class ScenarioManager {
     /** 指定フレームまで巻き戻した際の、最適な currentIndex を探す */
     _findStartIndexForFrame(targetFrame) {
         let index = 0;
-        while (index < this.scenario.length && this.scenario[index].frame < targetFrame) {
+        while (index < this._scenario.length && this._scenario[index].frame < targetFrame) {
             index++;
         }
         return index;
@@ -174,10 +200,10 @@ class ScenarioManager {
 
     /** 現在のインデックスから先に向かって、最初の LOOP_END を探す */
     skipToAfterLoop() {
-        for (let i = this.currentIndex; i < this.scenario.length; i++) {
-            if (this.scenario[i].type === 'LOOP_END') {
+        for (let i = this.currentIndex; i < this._scenario.length; i++) {
+            if (this._scenario[i].type === 'LOOP_END') {
                 this.currentIndex = i + 1;
-                this.currentScenarioFrame = this.scenario[i].frame;
+                this.currentScenarioFrame = this._scenario[i].frame;
                 return;
             }
         }
@@ -185,8 +211,7 @@ class ScenarioManager {
 
     /** リセット */
     reset() {
-        this.scenarioName = "UNKNOWN";
-        this.scenario = [];
+        this._scenario = [];
         this.stageName = "";
         this.bgm = "";
         this.kv = "";
@@ -199,6 +224,8 @@ class ScenarioManager {
         this.fireRateMultiplier = 1.0;
         
         this.version = "0.0"    
+
+        this.lastError = null;
     }
 
     /** 敵インスタンスの動的生成 */

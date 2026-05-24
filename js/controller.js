@@ -13,40 +13,41 @@
  */
 class SystemController {
     constructor() {
-        this.VERSION = "0.55";
+        this.VERSION = "0.56";
         this.canvas = document.getElementById('game-canvas');
 
         // URLパラメータの解析（GitHub上の別ブランチやタグをテストするため）
         const urlParams = new URLSearchParams(window.location.search);
         const tag = urlParams.get('tag');
-        const refPath = tag ? `tags/${tag}` : `heads/${urlParams.get('branch') || 'main'}`;
+        const branch = urlParams.get('branch') || 'main'
+        const refPath = tag ? `tags/${tag}` : `heads/${branch}`;
         const githubBase = `https://raw.githubusercontent.com/rmiura-ani/void-circuit-assets/refs/${refPath}/`;
 
         // 【優先切替】ローカルなら指定されたローカルパスを強制適用、本番ならGitHub
         const LOCAL_ASSET_ROOT = "../void-circuit-assets/";
-        this.isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
-        this.assetBase = this.isLocal ? LOCAL_ASSET_ROOT : githubBase;
-        this.branch = this.isLocal ? 'local' : (urlParams.get('branch') || 'main');
-
+        const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
+        if (isLocal) {
+            this.assetBase = LOCAL_ASSET_ROOT;
+            this.tag = 'local' 
+        } else {
+            this.assetBase = githubBase;
+            this.tag = tag ? `${tag}` : `${branch}`;
+        }
         // パスが必ずスラッシュ（/）で終わるように補正
         if (!this.assetBase.endsWith("/")) {
             this.assetBase += "/";
         }
 
-        console.log(`[System] Asset Base Path determined: "${this.assetBase}" (Local Mode: ${this.isLocal})`);
+        console.log(`[System] Asset Base Path determined: "${this.assetBase}" (Local Mode: ${isLocal})`);
 
         // サブシステムの初期化
         this.input = new InputManager(this.canvas);
         this.audio = new AudioManager(this.assetBase);
-        this.assets = new AssetManager(this.assetBase);
         
         // ConfigManagerのインスタンス化とロード
         this.config = new ConfigManager(this);
         this.config.loadConfig();
         
-        // クラス名の大文字ルールに準拠したインスタンス化
-        this.ScenarioManager = new ScenarioManager();
-
         this.game = null; 
         this.isShowingCredits = false;
         this.idleTimeout = null;
@@ -80,11 +81,6 @@ class SystemController {
         document.getElementById('config-open-btn').style.display = 'none';
 
         try {
-            // 各種アセット読み込み
-            this.audio.initAudio();
-            await Promise.all([this.audio.preloadAll()]);
-            await this.assets.preload(['player.webp']);
-
             // ハイスコア（ストレージから呼び出して表示）
             const loadHighScore = this.highScore;
             this.highScore = loadHighScore;
@@ -99,54 +95,6 @@ class SystemController {
             this.setStartMessage("❌ ERROR: Failed to Load Assets", "#F44");
         }
     }
-
-    /** ステージリソースのオンデマンド・ロード（SystemController.js） */
-    async loadStageAssets(stageNum) {
-        const fileName = `stage-${stageNum}/scenario.yaml`;
-        const scenarioPath = `${this.assetBase}${fileName}`;
-
-        try {
-            // 1. シナリオYAMLのロード
-            const loadSuccess = await this.ScenarioManager.loadScenario(scenarioPath, this.branch);
-            if (!loadSuccess) throw new Error("Scenario YAML load returned false.");
-
-            // 2. 【ここを追加！】YAMLに記述されている敵の画像名を動的に集めてプリロード
-            // YAML内の全エネミーから type を抽出し、画像ファイル名にマッピング
-            const enemyTypes = this.ScenarioManager.scenario.map(e => e.type);
-            const uniqueTypes = [...new Set(enemyTypes)]; // 重複を排除
-
-            const imagesToPreload = uniqueTypes.flatMap(type => {
-                // 7面ボス（boss_07）だけは第1形態・第2形態の2ファイルを出力
-                if (type === 'boss_07') {
-                    return [
-                        'enemy_boss_07_phase1.webp',
-                        'enemy_boss_07_phase2.webp'
-                    ];
-                }
-                if (type.startsWith('boss')) {
-                    return `enemy_${type}.webp`; // boss_01 -> enemy_boss_01.webp
-                }
-                return `enemy_${type}.webp`;     // straight -> enemy_straight.webp
-            });
-
-            // 割り出した画像をステージ開始前に一斉に裏でロード（終わるまで待つ）
-            if (imagesToPreload.length > 0) {
-                await this.assets.preload(imagesToPreload);
-            }
-
-            // 3. BGMのロード
-            const targetBGM = this.ScenarioManager.bgm;
-            if (targetBGM) {
-                await this.audio.loadStageBGM(targetBGM);
-            }            
-
-            return true;
-        } catch (error) {
-            console.error(`[System] Failed to load assets for stage ${stageNum}:`, error);
-            this.setStartMessage("❌ ERROR: Failed to Load Assets", "#F44");
-            return false;
-        }
-    }  
 
     /** イベントリスナー セットアップ */
     setupGlobalEvents() {

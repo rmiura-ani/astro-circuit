@@ -21,6 +21,7 @@ class Player extends Entity {
     static CD_STRAIGHT = 8;        // STRAIGHT時の連射クールダウン(フレーム)
     static CD_WIDE = 12;           // WIDE時の連射クールダウン(フレーム)
     
+
     constructor(game, input, x, y) {
         super(x, y, Player.START_WIDTH, Player.START_HEIGHT);
         this.halfWidth = this.width / 2;
@@ -37,10 +38,11 @@ class Player extends Entity {
         this.shotCooldown = 0;             // 連射制限用クールダウンタイマー
         this.weaponSwitchReady = true;     // Xキーの押しっぱなしによる高速連打防止フラグ
 
-        const fileName = "player.webp";
-        this.image = game.assets.get(fileName);
-        this.isLoaded = !!this.image;
-
+        this.image = new Image();;
+        this.image.onload = () => {
+            this.isLoaded = true;
+        };
+        this.image.src = `${game.sc.assetBase}player.webp`;
         this.input.getAndResetCanvasOutClick();     // 1回読み捨て
     }
 
