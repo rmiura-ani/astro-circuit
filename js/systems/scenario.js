@@ -13,13 +13,15 @@
  */
 class ScenarioManager {
     constructor() {
-        this.REQUIRED_VERSION = 0.2;
+        this.REQUIRED_VERSION = 0.3;
         this.reset();
     }
 
     /** YAMLシナリオファイルをロード */
     async loadScenario(path, scenarioName) {
         try {
+            this.scenarioName = scenarioName;
+
             const res = await fetch(path);
             if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
             
@@ -43,8 +45,6 @@ class ScenarioManager {
             // 敵データの抽出とソート
             this.scenario =  data.scenario.sort((a, b) => a.frame - b.frame);
             
-            this.scenarioName = scenarioName;
-
             console.log(`[System] YAML Scenario "${path}" loaded. (${this.scenario.length} events)`);
             return true;
         } catch (e) {
@@ -185,11 +185,11 @@ class ScenarioManager {
 
     /** リセット */
     reset() {
+        this.scenarioName = "UNKNOWN";
         this.scenario = [];
         this.stageName = "";
         this.bgm = "";
         this.kv = "";
-        this.scenarioName = "UNKNOWN";
 
         this.currentIndex = 0;
         this.currentScenarioFrame = 0;

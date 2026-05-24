@@ -40,7 +40,7 @@ class SoundTestManager {
             .filter(meta => meta && meta.bgm)
             .map(meta => ({
                 fileName: meta.bgm,
-                displayName: `ST-${meta.stageNum}: ${meta.name}`
+                displayName: `${meta.name}`
             }));
 
         if (this.sc.audio) {

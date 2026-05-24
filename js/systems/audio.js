@@ -19,6 +19,10 @@ class AudioManager {
         this.bgms = {};
         this.sounds = {};
 
+        // 🔊 【新設】マスターボリュームの％管理 (0.0 〜 1.0)
+        this.seVolume = 0.8;   // デフォルト 80%
+        this.bgmVolume = 0.7;  // デフォルト 70%
+
         // BGMテスト用の再生終了時コールバックを保持するプロパティ
         this.onBGMEnded = null;
 
@@ -29,12 +33,12 @@ class AudioManager {
             high: 0
         };
 
-        // 🏛️ 【新設】空間アコースティックプリセットの定義
+        // 🏛️ 空間アコースティックプリセットの定義
         this.ROOM_PRESETS = {
-            0: { name: "01. NORMAL",  delayTime: 0.0,  feedback: 0.0, reverbWet: 0.0, echoWet: 0.0, desc: "DRY SOUND" },
-            1: { name: "02. COCKPIT", delayTime: 0.03, feedback: 0.35, reverbWet: 0.3, echoWet: 0.15, desc: "METALLIC SHORT ECHO" },
-            2: { name: "03. SPACE",   delayTime: 0.4,  feedback: 0.4, reverbWet: 0.0, echoWet: 0.35, desc: "DEEP SPACE DELAY" },
-            3: { name: "04. FACTORY", delayTime: 0.22,  feedback: 0.3, reverbWet: 0.35, echoWet: 0.25, desc: "HEAVY INDUSTRIAL REVERB" }
+            0: { name: "1.NORMAL",  delayTime: 0.0,  feedback: 0.0, reverbWet: 0.0, echoWet: 0.0, desc: "DRY SOUND" },
+            1: { name: "2.CP-01 ", delayTime: 0.03, feedback: 0.35, reverbWet: 0.3, echoWet: 0.15, desc: "METALLIC SHORT ECHO" },
+            2: { name: "3.GALAXY",   delayTime: 0.4,  feedback: 0.4, reverbWet: 0.0, echoWet: 0.35, desc: "DEEP SPACE DELAY" },
+            3: { name: "4.IND-ST", delayTime: 0.22,  feedback: 0.3, reverbWet: 0.35, echoWet: 0.25, desc: "HEAVY INDUSTRIAL REVERB" }
         };
         this.currentPresetId = 0; // デフォルトは NORMAL
 
@@ -59,7 +63,7 @@ class AudioManager {
         this.eqMid = null;
         this.eqHigh = null;
 
-        // 🎛️ 【新設】エフェクト（DSP）ノード群
+        // 🎛️ エフェクト（DSP）ノード群
         this.dryNode = null;       // 原音用ゲイン
         this.echoNode = null;      // エコー（ディレイ）ノード
         this.echoFeedback = null;  // エコーの跳ね返り量ゲイン
@@ -81,13 +85,37 @@ class AudioManager {
         this.DYNAMIC_BGM_LIST = list; 
     }
 
+    /** 🔄 【新設】SEマスター音量の変更メソッド (Configから叩かれる) */
+    setSEVolume(volume) {
+        this.seVolume = volume;
+        // 既存のベースSE音源すべての実音量を【掛け算】で再計算して適用
+        this.seKeys.forEach(key => {
+            if (this.sounds[key]) {
+                const baseVol = this.CONFIG.SE[key].vol;
+                this.sounds[key].volume = baseVol * this.seVolume;
+            }
+        });
+        console.log(`[Audio] Master SE Volume -> ${Math.round(volume * 100)}%`);
+    }
+
+    /** 🔄 【新設】BGMマスター音量の変更メソッド (Configから叩かれる) */
+    setBGMVolume(volume) {
+        this.bgmVolume = volume;
+        // 現在流れているBGMがあれば、即座に【掛け算】して反映
+        if (this.currentBgm) {
+            this.currentBgm.volume = 0.7 * this.bgmVolume; // ベースボリューム0.7に掛け算
+        }
+        console.log(`[Audio] Master BGM Volume -> ${Math.round(volume * 100)}%`);
+    }
+
     /** SE初期化 */
     initAudio() {
         this.seKeys.forEach(key => {
             const conf = this.CONFIG.SE[key];
             const audio = new Audio(this.basePath + conf.file);
             audio.crossOrigin = "anonymous";
-            audio.volume = conf.vol;
+            // 🌟 初期化時にも【マスター音量 × 固有音量】を掛け算してセット
+            audio.volume = conf.vol * this.seVolume;
             this.sounds[key] = audio;
         });
     }
@@ -120,7 +148,8 @@ class AudioManager {
             const audio = new Audio(this.basePath + fileName);
             audio.crossOrigin = "anonymous";
             audio.loop = true; // ゲーム本編は標準でループ再生
-            audio.volume = 0.7;
+            // 🌟 ロード時も【ベース 0.7 × マスター音量】を掛け算
+            audio.volume = 0.7 * this.bgmVolume;
 
             let isResolved = false;
 
@@ -166,7 +195,8 @@ class AudioManager {
 
         if (this.currentBgm) {
             this.currentBgm.currentTime = 0; // 再生直前に確実に頭出しを行う
-            this.currentBgm.volume = 0.7;
+            // 🌟 再生開始時も【ベース 0.7 × マスター音量】を掛け算
+            this.currentBgm.volume = 0.7 * this.bgmVolume;
             
             // Audioタグの音声を Web Audio API の解析土管へバイパス接続する
             this.setupAnalyserBridge(this.currentBgm);
@@ -207,7 +237,7 @@ class AudioManager {
             this.eqHigh.type = 'highshelf';
             this.eqHigh.frequency.value = 5000; // 5kHz以上
 
-            // 🎛️ 【新設】エフェクト（空間音響）ノードの構築
+            // 🎛️ エフェクト（空間音響）ノードの構築
             this.dryNode = this.audioCtx.createGain();
             this.dryNode.gain.value = 1.0;
 
@@ -307,7 +337,7 @@ class AudioManager {
     }
 
     /**
-          * 空間アコースティックプリセットを切り替える
+     * 空間アコースティックプリセットを切り替える
      * @param {number} presetId - 0: NORMAL, 1: COCKPIT, 2: SPACE, 3: FACTORY
      */
     setAudioRoomPreset(presetId) {
@@ -347,7 +377,7 @@ class AudioManager {
         }
         Object.values(this.bgms).forEach(b => {
             b.pause();
-            b.volume = 0.7;
+            b.volume = 0.7 * this.bgmVolume; // 🌟 リセット時も掛け算の状態を維持
             b.onended = null;
         });
         this.currentBgm = null;
@@ -380,6 +410,7 @@ class AudioManager {
         const baseAudio = this.sounds[key];
         if (baseAudio) {
             const clone = baseAudio.cloneNode(true);
+            // 🌟 クローン再生する際も、現在の掛け算済みの最新音量をそのまま引き継ぐ
             clone.volume = baseAudio.volume;
             clone.play().catch(() => {});
             
@@ -394,11 +425,11 @@ class AudioManager {
     // Sound Test Helpers
     get bgmCount() { return this.DYNAMIC_BGM_LIST.length; }
     get seCount() { return this.seKeys.length; }
-    get roomPresetCount() { return Object.keys(this.ROOM_PRESETS).length; } // 📻 UI用に追加
+    get roomPresetCount() { return Object.keys(this.ROOM_PRESETS).length; } 
     
     getBGMName(idx) { return this.DYNAMIC_BGM_LIST[idx]?.displayName.toUpperCase() || "NONE"; }
     getSEName(idx) { return this.seKeys[idx]?.toUpperCase() || "NONE"; }
-    getRoomPresetName(idx) { return this.ROOM_PRESETS[idx]?.name || "UNKNOWN"; } // 📻 UI用に追加
+    getRoomPresetName(idx) { return this.ROOM_PRESETS[idx]?.name || "UNKNOWN"; } 
     
     async playBGMByIndex(idx) {
         const bgmData = this.DYNAMIC_BGM_LIST[idx];

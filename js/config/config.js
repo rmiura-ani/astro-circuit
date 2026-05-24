@@ -6,7 +6,7 @@
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
-*/
+ */
 
 /**
  * 設定画面（BIOS風）を管理するクラス
@@ -21,24 +21,20 @@ class ConfigManager {
         this.soundTest = new SoundTestManager(sc);
         this.soundTest.onIndexChanged = () => this.refreshAllDisplay();
 
-        // --- 選択肢・内部パラメータの定義 ---
         this.OPTIONS = {
             difficulty: ['EASY', 'NORMAL', 'HARD', 'VERY HARD'],
             lives: [1, 2, 3, 5],
             extend: [3000000, 5000000, 10000000, 'NONE']
         };
 
-        // --- 設定値 ---
-        this.difficulty = this.OPTIONS.difficulty[1]; // 'NORMAL'
-        this.lives      = this.OPTIONS.lives[2];      // 3
-        this.extend     = this.OPTIONS.extend[1];     // 5,000,000        
+        this.difficulty = this.OPTIONS.difficulty[1];
+        this.lives      = this.OPTIONS.lives[2];
+        this.extend     = this.OPTIONS.extend[1];        
         this.isInvincibleCheat = false;
 
-        // --- DOM要素 ---
         this.screenEl = document.getElementById('config-screen');
         this.startScreenEl = document.getElementById('start-screen');
         this.items = [];
-
         this.resetConfirmed = false;
     }
 
@@ -51,13 +47,12 @@ class ConfigManager {
         this.items = Array.from(document.querySelectorAll('.config-item'));
         this.setupMouseEvents();
         
-        this.refreshAllDisplay();
-        this.updateSelection();
         this.soundTest.setupAudioEndedListener(this.isMode);
 
-        // 動的リスト構築も委託
+        // 🔄 リスト構築を待ってから、1回だけまとめて画面を正しく描画する
         await this.soundTest.buildDynamicSoundTestList();
         this.refreshAllDisplay();
+        this.updateSelection();
 
         const eqCanvas = document.getElementById('eq-overlay-canvas');
         if (eqCanvas) {
@@ -72,8 +67,13 @@ class ConfigManager {
         this.screenEl.style.display = 'none';
         this.startScreenEl.style.display = 'flex';
         
-        // --- ⚙️ BGMモードクラスを確実に剥がす ---
         this.screenEl.classList.remove('bgm-testing-mode');
+
+        // 🛑 安全のため、オーディオを破棄する「前」に描画ループを完全に止める
+        if (this.loopId) {
+            cancelAnimationFrame(this.loopId);
+            this.loopId = null;
+        }
 
         this.soundTest.stopAndReset();
 
@@ -82,18 +82,13 @@ class ConfigManager {
             eqContainer.style.opacity = '0';
             eqContainer.style.display = 'none';
         }
-
-        if (this.loopId) {
-            cancelAnimationFrame(this.loopId);
-            this.loopId = null;
-        }
     }
 
     /** キー入力処理 */
     handleInput(e) {
         if (!this.isMode) return;
 
-        // 🚀 現在画面に見えている（有効な）アイテムだけを抽出
+        // 🚀 画面に見えている有効なアイテムだけを抽出（ここで完全制御）
         const visibleItems = this.items.filter(item => {
             return window.getComputedStyle(item).display !== 'none' && 
                    window.getComputedStyle(item).opacity !== '0';
@@ -101,20 +96,17 @@ class ConfigManager {
 
         if (visibleItems.length === 0) return;
 
-        // 現在選択中のアイテムが、見えているリストの中で何番目かを探す
         let currentVisibleIdx = visibleItems.indexOf(this.items[this.currentIndex]);
         if (currentVisibleIdx === -1) currentVisibleIdx = 0;
 
         switch (e.code) {
             case 'ArrowUp':
                 currentVisibleIdx = (currentVisibleIdx - 1 + visibleItems.length) % visibleItems.length;
-                // 全体リスト側のインデックスに変換して同期
                 this.currentIndex = this.items.indexOf(visibleItems[currentVisibleIdx]);
                 this.updateSelection();
                 break;
             case 'ArrowDown':
                 currentVisibleIdx = (currentVisibleIdx + 1) % visibleItems.length;
-                // 全体リスト側のインデックスに変換して同期
                 this.currentIndex = this.items.indexOf(visibleItems[currentVisibleIdx]);
                 this.updateSelection();
                 break;
@@ -122,8 +114,8 @@ class ConfigManager {
             case 'ArrowRight':
                 this.handleValueChange(e.code === 'ArrowRight');
                 break;
-            case 'KeyZ':
             case 'Space':
+            case 'KeyZ':
                 this.handleAction();
                 break;
             case 'KeyC':
@@ -132,7 +124,7 @@ class ConfigManager {
         }
     }
 
-    /** 値の変更処理 (左右キー / マウスクリック) */
+    /** 値の変更処理 */
     handleValueChange(isRight) {
         const item = this.items[this.currentIndex];
         if (!item) return;
@@ -143,12 +135,35 @@ class ConfigManager {
             let idx = options.indexOf(this[setting]);
             idx = isRight ? (idx + 1) % options.length : (idx - 1 + options.length) % options.length;
             this[setting] = options[idx];
+        } else if (setting === 'se_vol' && this.sc.audio) {
+        // audioManager側が「0.0 〜 1.0」で保持していると仮定し、10%（0.1）ずつ増減
+            let vol = this.sc.audio.seVolume ?? 0.8; 
+            vol = isRight ? (vol + 0.1) : (vol - 0.1);
+            
+            // 浮動小数点数の丸め誤差対策をしつつループ処理（0.0 〜 1.0）
+            if (vol > 1.05) vol = 0.0;
+            if (vol < -0.05) vol = 1.0;
+            vol = Math.max(0, Math.min(1, Math.round(vol * 10) / 10));
+
+            // audioManager 側の変数更新 & 音量反映メソッドの実行
+            this.sc.audio.seVolume = vol;
+            if (this.sc.audio.setSEVolume) this.sc.audio.setSEVolume(vol);
+        } else if (setting === 'bgm_vol' && this.sc.audio) {
+            let vol = this.sc.audio.bgmVolume ?? 0.7;
+            vol = isRight ? (vol + 0.1) : (vol - 0.1);
+            
+            if (vol > 1.05) vol = 0.0;
+            if (vol < -0.05) vol = 1.0;
+            vol = Math.max(0, Math.min(1, Math.round(vol * 10) / 10));
+
+            this.sc.audio.bgmVolume = vol;
+            if (this.sc.audio.setBGMVolume) this.sc.audio.setBGMVolume(vol);
         } else if (setting === 'sound') {
-            this.soundTest.changeSEIndex(isRight); // 委託
+            this.soundTest.changeSEIndex(isRight); 
         } else if (setting === 'bgm') {
-            this.soundTest.changeBGMIndex(isRight); // 委託
+            this.soundTest.changeBGMIndex(isRight); 
         } else if (setting === 'audio_room') {
-            this.soundTest.changeRoomPresetIndex(isRight); // 📻【追加】空間エフェクトインデックス変更を委託
+            this.soundTest.changeRoomPresetIndex(isRight); 
         } else if (setting === 'eq_low' || setting === 'eq_mid' || setting === 'eq_high') {
             this.soundTest.changeEQGain(setting, isRight);
         }
@@ -161,12 +176,9 @@ class ConfigManager {
         if (!item) return;
         const setting = item.dataset.setting;
 
-        if (setting === 'sound') {
-            this.soundTest.playSE(); // 委託
-        }
-        if (setting === 'bgm') {
-            this.toggleBGMAndTransform();
-        }
+        if (setting === 'sound') this.soundTest.playSE(); 
+        if (setting === 'bgm') this.toggleBGMAndTransform();
+        
         if (setting === 'reset_score') {
             if (!this.resetConfirmed) {
                 this.resetConfirmed = true;
@@ -199,44 +211,52 @@ class ConfigManager {
         const setting = item.dataset.setting;
         const valEl = item.querySelector('.value');
         if (!valEl) return;
+        const audio = this.sc.audio;
+
+        const wrapArrows = (text) => {
+            return `<span class="arrow-btn left-arrow" style="cursor:pointer; padding:0 6px; user-select:none;">&lt;</span>` +
+                `<span class="inner-val">${text}</span>` +
+                `<span class="arrow-btn right-arrow" style="cursor:pointer; padding:0 6px; user-select:none;">&gt;</span>`;
+        };
 
         if (this.OPTIONS[setting]) {
-            valEl.innerText = this[setting];
+            valEl.innerHTML = wrapArrows(this[setting]);
+        } else if (setting === 'se_vol') {
+            const vol = audio ? Math.round((audio.seVolume ?? 0.8) * 100) : 80;
+            const txt = vol === 0 ? "MUTED" : (vol === 100 ? "MAX" : `${vol}%`);
+            valEl.innerHTML = wrapArrows(txt);
+        } else if (setting === 'bgm_vol') {
+            const vol = audio ? Math.round((audio.bgmVolume ?? 0.7) * 100) : 70;
+            const txt = vol === 0 ? "MUTED" : (vol === 100 ? "MAX" : `${vol}%`);
+            valEl.innerHTML = wrapArrows(txt);
         } else if (setting === 'sound') {
-            valEl.innerText = `< ${this.sc.audio.getSEName(this.soundTest.soundTestIndex)} >`;
+            valEl.innerHTML = wrapArrows(audio ? audio.getSEName(this.soundTest.soundTestIndex) : "---");
         } else if (setting === 'bgm') {
-            const audio = this.sc.audio;
+            const titleEl = document.querySelector('.bgm-title');
             if (!audio || audio.bgmCount === 0) {
-                valEl.innerText = "< LOADING... >";
+                valEl.innerHTML = wrapArrows("LOADING...");
+                if (titleEl) titleEl.innerText = "Please wait...";
             } else {
-                valEl.innerText = `< ${audio.getBGMName(this.soundTest.bgmTestIndex)} >`;
-            }
+                const bgmID = `STAGE-${this.soundTest.bgmTestIndex + 1}`;
+                valEl.innerHTML = wrapArrows(bgmID);
+                if (titleEl) titleEl.innerText = audio.getBGMName(this.soundTest.bgmTestIndex);
+            }            
         } else if (setting === 'audio_room') {
-            // 📻【追加】オーディオマネージャー側からアコースティックプリセット文字列をバインド
-            const audio = this.sc.audio;
             if (!audio || !audio.getRoomPresetName) {
-                valEl.innerText = "< NOT READY >";
+                valEl.innerHTML = wrapArrows("NOT READY");
             } else {
-                valEl.innerText = `< ${audio.getRoomPresetName(this.soundTest.roomPresetIndex)} >`;
+                valEl.innerHTML = wrapArrows(audio.getRoomPresetName(this.soundTest.roomPresetIndex));
             }
         } else if (setting === 'eq_low' || setting === 'eq_mid' || setting === 'eq_high') {
             const targetBand = setting.replace('eq_', '');
-            const val = this.sc.audio ? this.sc.audio.eqSettings[targetBand] : 0;
+            const val = audio ? audio.eqSettings[targetBand] : 0;
             const sign = val > 0 ? "+" : "";
-            valEl.innerText = `${sign}${val} dB`;
+            valEl.innerHTML = wrapArrows(`${sign}${val} dB`);
         }
     }
-
-    /** 選択 */
+    
+    /** 選択状態の更新（冗長な強制bgm変更をカットして軽量化） */
     updateSelection() {
-        // 🚀 もし選択中の項目が非表示（ゴースト）になっていたら、安全な項目にカーソルを避難させる
-        const currentItem = this.items[this.currentIndex];
-        if (currentItem && (window.getComputedStyle(currentItem).display === 'none' || window.getComputedStyle(currentItem).opacity === '0')) {
-            // 代替として「BGM TEST」の項目を探してそこにカーソルを合わせる
-            const bgmItemIdx = this.items.findIndex(item => item.dataset.setting === 'bgm');
-            if (bgmItemIdx !== -1) this.currentIndex = bgmItemIdx;
-        }
-
         this.items.forEach((item, index) => {
             item.classList.toggle('active', index === this.currentIndex);
         });
@@ -244,12 +264,9 @@ class ConfigManager {
         this.debugCCount = 0;
     }
 
-    /** マウスイベントハンドラ セットアップ */
+    /** マウスイベントセットアップ */
     setupMouseEvents() {
         this.items.forEach((item, index) => {
-            item.onclick = null;
-            item.onmouseenter = null;
-
             item.onclick = (e) => {
                 e.stopPropagation();
                 if (this.currentIndex !== index) {
@@ -257,22 +274,35 @@ class ConfigManager {
                     this.updateSelection();
                 }
                 const setting = item.dataset.setting;
-                
-                if (setting === 'bgm') {
-                    this.toggleBGMAndTransform();
-                    this.refreshDisplay(item);
-                } else if (this.OPTIONS[setting] || setting === 'sound' || setting === 'audio_room' || setting.startsWith('eq_')) {
-                    this.handleValueChange(true);
+                const isLeftArrow = e.target.classList.contains('left-arrow');
+                const isRightArrow = e.target.classList.contains('right-arrow');
+
+                if (isLeftArrow || isRightArrow) {
+                    this.handleValueChange(isRightArrow);
                     if (this.sc.audio) this.sc.audio.playHitSound();
+                    if (setting === 'sound') this.soundTest.playSE();
                 } else {
-                    this.handleAction();
+                    if (setting === 'bgm') {
+                        this.toggleBGMAndTransform();
+                        this.refreshDisplay(item);
+                    } else if (setting === 'eq_low' || setting === 'eq_mid' || setting === 'eq_high') {
+                        const targetBand = setting.replace('eq_', '');
+                        if (this.sc.audio) {
+                            this.sc.audio.setEQGain(targetBand, 0);
+                            this.sc.audio.playHitSound();
+                        }
+                        this.refreshDisplay(item);
+                    } else if (this.OPTIONS[setting] || setting === 'audio_room') {
+                        this.handleValueChange(true);
+                        if (this.sc.audio) this.sc.audio.playHitSound();
+                    } else {
+                        this.handleAction();
+                    }
                 }
             };
 
             item.onmouseenter = () => {
-                // 🚀 隠れている項目はマウスホバーも完全に無視する
                 if (window.getComputedStyle(item).display === 'none' || window.getComputedStyle(item).opacity === '0') return;
-
                 if (this.currentIndex !== index) {
                     this.currentIndex = index;
                     this.updateSelection();
@@ -281,17 +311,14 @@ class ConfigManager {
         });
     }
 
-    /** BGMテストの再生・停止と画面のトランスフォームを制御 */
+    /** BGMテスト再生制御 */
     toggleBGMAndTransform() {
-        // 🚀 コールバックで自分自身（ConfigManager）の表示関数を渡す
         this.soundTest.toggleBGM(() => this.showEqualizerContainer());
 
-        // 再生状態に合わせてCSSクラスをつけ外しし、画面を変形させる
         if (this.soundTest.isBGMPlaying) {
             this.screenEl.classList.add('bgm-testing-mode');
         } else {
             this.screenEl.classList.remove('bgm-testing-mode');
-            // 停止時は即座にEQコンテナを非表示にする
             const eqContainer = document.getElementById('eq-container');
             if (eqContainer) {
                 eqContainer.style.opacity = '0';
@@ -300,7 +327,6 @@ class ConfigManager {
         }
     }
 
-    /** イコライザーコンテナを表示するヘルパー */
     showEqualizerContainer() {
         const eqContainer = document.getElementById('eq-container');
         if (eqContainer) {
@@ -309,7 +335,6 @@ class ConfigManager {
         }
     }
 
-    /** 「リセットしていい？」の解除 */
     cancelResetConfirm() {
         this.resetConfirmed = false;
         this.items.forEach(item => {
@@ -321,7 +346,6 @@ class ConfigManager {
         });
     }
 
-    /** ハイスコアリセット */
     executeHighScoreReset() {
         if (this.sc.audio) this.sc.audio.playExplosion();
         if (this.sc.visualEffectWarning) this.sc.visualEffectWarning();
@@ -338,7 +362,6 @@ class ConfigManager {
         }
     }
 
-    /** 無敵設定（裏コマンド） */
     handleCheatCommand() {
         this.debugCCount++;
         if (this.debugCCount < 7) return;
@@ -373,7 +396,6 @@ class ConfigManager {
             this.difficulty = this.OPTIONS.difficulty.includes(data.difficulty) ? data.difficulty : this.OPTIONS.difficulty[1];
             this.lives = this.OPTIONS.lives.includes(data.lives) ? data.lives : this.OPTIONS.lives[2];
             this.extend = this.OPTIONS.extend.includes(data.extend) ? data.extend : this.OPTIONS.extend[1];
-            
             this.refreshAllDisplay();
         } catch (e) {
             console.error("Config corruption detected. Resetting to defaults.", e);
