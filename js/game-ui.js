@@ -147,6 +147,25 @@ export class GameUIManager {
             ctx.fillStyle = `rgba(255, 255, 255, ${textAlpha})`;
             ctx.fillText(this.game.scenario.stageName, GAME_CONFIG.WIDTH / 2, textCenterY + 30);
         }
+
+        // ゲームオーバー演出
+        if (!this.game.player.alive && this.game.currentLives <= 0) {
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.fillRect(0, GAME_CONFIG.HEIGHT / 2 - 50, GAME_CONFIG.WIDTH, 100);
+            ctx.fillStyle = '#FFF';
+            ctx.fillText('GAME OVER', GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2);
+        }
+
+        // ステージクリア演出
+        if (this.game.isCleared) {
+            const stageNameStr = this.ScenarioManager.stageName; 
+            ctx.fillStyle = '#0FF';
+            ctx.fillText(`STAGE ${this.currentStageNum} CLEAR`, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2);            
+            ctx.font = '10px "Press Start 2P", cursive';
+            ctx.fillStyle = '#FFF';
+            ctx.fillText(stageNameStr, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2 + 30);
+        }
+
         ctx.restore();
     }
 }

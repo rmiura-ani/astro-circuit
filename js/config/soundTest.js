@@ -41,10 +41,12 @@ export class SoundTestManager {
             
             // 2. 取得できたデータから、BGMが設定されているものだけを抽出してリスト化
             const validBgmList = results
-                .filter(meta => meta && meta.bgm)
-                .map(meta => ({
-                    fileName: meta.bgm,
-                    displayName: `${meta.name}`
+                .map((meta, index) => ({ meta, stageNum: index + 1 })) // 💡 元のループ順からステージ番号を紐付け
+                .filter(item => item.meta && item.meta.bgm)
+                .map(item => ({
+                    stageNumber: item.stageNum, // 💡 ここでステージ番号を明示的に保持！
+                    fileName: item.meta.bgm,
+                    displayName: `${item.meta.name}`
                 }));
 
             if (validBgmList.length === 0) {
@@ -68,8 +70,18 @@ export class SoundTestManager {
 
             // 4. オーディオマネージャー側に動的リストを認識させる
             this.sc.audio.setDynamicBGMList(validBgmList);            
+            this.bgmList = validBgmList;
         }
-    
+
+    /** 補助メソッド：現在のステージ表記＋曲名を識別子として取得 */
+    _getCurrentBgmName() {
+        if (this.bgmList && this.bgmList[this.bgmTestIndex]) {
+            const current = this.bgmList[this.bgmTestIndex];
+            return `Stage-${current.stageNumber} [${current.fileName}]`;
+        }
+        return `Unknown_BGM_${this.bgmTestIndex}`;
+    }
+
     /** SEの選択インデックスを変更 */
     changeSEIndex(isRight) {
         if (!this.sc.audio) return;
@@ -85,9 +97,9 @@ export class SoundTestManager {
         const len = this.sc.audio.bgmCount;
         if (len > 0) {
             this.bgmTestIndex = isRight ? (this.bgmTestIndex + 1) % len : (this.bgmTestIndex - 1 + len) % len;
-            // 再生中なら即座に切り替える
             if (this.isBGMPlaying) {
                 this.sc.audio.playBGMByIndex(this.bgmTestIndex);
+                Analytics.logBgmTestPlay(this._getCurrentBgmName());
             }
         }
     }
@@ -119,6 +131,8 @@ export class SoundTestManager {
 
         if (this.isBGMPlaying) {
             this.sc.audio.playBGMByIndex(this.bgmTestIndex);
+            Analytics.logBgmTestPlay(this._getCurrentBgmName());
+
             if (typeof onToggleOnCallback === 'function') {
                 onToggleOnCallback(); // イコライザー表示用コールバック
             }
@@ -147,6 +161,7 @@ export class SoundTestManager {
         this.bgmTestIndex = (this.bgmTestIndex + 1) % len;
         this.isBGMPlaying = true;
         this.sc.audio.playBGMByIndex(this.bgmTestIndex);
+        Analytics.logBgmTestPlay(this._getCurrentBgmName());
 
         // UI側に「曲が変わったから描画更新して！」と通知
         if (typeof this.onIndexChanged === 'function') {

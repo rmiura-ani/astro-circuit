@@ -215,9 +215,19 @@ export class ConfigManager {
         const audio = this.sc.audio;
 
         const wrapArrows = (text) => {
-            return `<span class="arrow-btn left-arrow" style="cursor:pointer; padding:0 6px; user-select:none;">&lt;</span>` +
-                `<span class="inner-val">${text}</span>` +
-                `<span class="arrow-btn right-arrow" style="cursor:pointer; padding:0 6px; user-select:none;">&gt;</span>`;
+            // 💡 スタイルの共通定義（上下 10px、左右 14px ほど透明なアタリ判定を広げる）
+            const btnStyle = `
+                cursor: pointer; 
+                padding: 10px 14px; 
+                margin: -10px -14px; 
+                user-select: none; 
+                display: inline-block;
+                font-weight: bold;
+            `.replace(/\s+/g, ' '); // 1行にまとめる
+
+            return `<span class="arrow-btn left-arrow" style="${btnStyle}"> ◀ </span>` +
+                `<span class="inner-val" style="padding: 0 12px; display: inline-block; min-width: 80px; text-align: center;">${text}</span>` +
+                `<span class="arrow-btn right-arrow" style="${btnStyle}"> ▶ </span>`;
         };
 
         if (this.OPTIONS[setting]) {
@@ -293,7 +303,7 @@ export class ConfigManager {
                             this.sc.audio.playHitSound();
                         }
                         this.refreshDisplay(item);
-                    } else if (this.OPTIONS[setting] || setting === 'audio_room') {
+                    } else if (this.OPTIONS[setting] || setting === 'audio_room' || setting === 'se_vol' || setting === 'bgm_vol') {
                         this.handleValueChange(true);
                         if (this.sc.audio) this.sc.audio.playHitSound();
                     } else {

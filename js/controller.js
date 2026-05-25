@@ -17,7 +17,7 @@ import { Game } from './game.js';
  */
 export class SystemController {
     constructor() {
-        this.VERSION = "0.57";
+        this.VERSION = "0.58";
         this.canvas = document.getElementById('game-canvas');
 
         // URLパラメータの解析（GitHub上の別ブランチやタグをテストするため）
@@ -96,6 +96,7 @@ export class SystemController {
             console.error("[System] Init Failed:", e);
             this.setStartMessage("❌ ERROR: Failed to Load Assets", "#F44");
         }
+        Analytics.logGameLaunch(this.VERSION);
     }
 
     /** main.js から呼ばれる起動エントリーポイント */ 
@@ -147,7 +148,7 @@ export class SystemController {
                 if (keyNum >= 1 && keyNum <= 7) {
                     this.handleProceed('KEYBOARD', keyNum);
                 }
-            }1
+            }
         });
 
         const credits = document.getElementById('credit-screen');

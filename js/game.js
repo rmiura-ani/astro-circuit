@@ -382,6 +382,7 @@ export class Game {
 
         Analytics.logLevelEnd(this.stats, this.sessionRecord, this.isCleared);
 
+        Analytics.logPostScore(this.score, this.stageNum);
         const isNew = this.score > this.sc.highScore && this.score > 0;
         if (isNew) {
             this.sc.highScore = this.score;

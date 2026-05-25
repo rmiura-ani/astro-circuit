@@ -29,6 +29,18 @@ const Analytics = {
             }
         }
     },
+
+    /**
+     * ゲームの起動時（インデックスや初期化完了時に呼び出し）
+     * @param {string} [version] - ゲームのバージョン（省略可）
+     */
+    logGameLaunch(version = "1.0.0") {
+        // GA4推奨の game_app_launch を使用
+        this._send('game_app_launch', {
+            game_version: version
+        });
+    },
+
     /**
      * ゲーム開始時の記録
      * @param {Object} record - this.sessionRecord
@@ -86,6 +98,32 @@ const Analytics = {
     logAchievement(achievementId) {
         this._send('unlock_achievement', {
             achievement_id: achievementId
+        });
+    },
+
+    /**
+     * スコア確定・ハイスコア更新時の記録（GA4推奨：post_score）
+     * @param {number} score - 獲得したスコア数値
+     * @param {string} levelName - ステージ名（'all_stage', 'mission_01' など）
+     * @param {string} [character] - 使用機体/キャラクター名（もしあれば・省略可）
+     */
+    logPostScore(score, levelName, character = "default") {
+        this._send('post_score', {
+            score: score,
+            level_name: levelName,
+            character: character
+        });
+    },
+
+    /**
+     * BGM TESTで曲を鳴らしたときの記録
+     * @param {string} trackName - 曲名やID（例: "Stage 1 - Void", "bgm_01"）
+     */
+    logBgmTestPlay(trackName) {
+        // コンテンツ選択イベントとして送信（独自の bgm_test_play でも可）
+        this._send('select_content', {
+            content_type: 'bgm_test',
+            item_id: trackName
         });
     }
 };
