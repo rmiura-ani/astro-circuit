@@ -192,7 +192,6 @@ class Bullet extends Entity {
     static DEFAULT_WIDTH = 4;
     static DEFAULT_HEIGHT = 10;
     static DEFAULT_VY = -7;
-    static OUT_OF_BOUNDS_OFFSET = 20; // 画面外にどれだけはみ出したら消去するか
 
     constructor(x, y, vx = 0) {
         super(x, y, Bullet.DEFAULT_WIDTH, Bullet.DEFAULT_HEIGHT);
@@ -208,7 +207,7 @@ class Bullet extends Entity {
         this.x += this.vx; 
         this.y += this.vy; 
 
-        if (this.isOutOfBounds(Bullet.OUT_OF_BOUNDS_OFFSET)) {
+        if (this.isOutOfBounds(20)) {
             this.active = false;
         }
     }

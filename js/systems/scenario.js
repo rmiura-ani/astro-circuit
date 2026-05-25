@@ -41,7 +41,10 @@ export class ScenarioManager {
             // メタデータの抽出
             this.stageName = data.name || "Unknown Stage";
             this.bgm = data.bgm || "";
-            this.kv = data.kv || "";
+            this.kv = data.kv || null;
+
+            this.preloadAssets = data.preloadAssets || [];
+
             // 敵データの抽出とソート
             this._scenario =  data.scenario.sort((a, b) => a.frame - b.frame);
             
@@ -53,79 +56,79 @@ export class ScenarioManager {
         }
     }
 
-async loadStageResources(stageNum, assetManager, audioManager, assetBase) {
-    const fileName = `stage-${stageNum}/scenario.yaml`;
-    const scenarioPath = `${assetBase}${fileName}`;
-    
-    // ✨ 新しいロードが始まるので、前回の残ったエラーをクリアする
-    this.lastError = null; 
-
-    try {
-        // 1. シナリオYAML自体のロード
-        const loadSuccess = await this.loadScenario(scenarioPath);
-        // 💡 どこで落ちたか分かりやすくするため、エラーメッセージを具体的に記載
-        if (!loadSuccess) throw new Error(`Failed to load scenario file: "${fileName}"`);
-
-        // 2. scenario配下から出現する敵の種類を自動スキャン
-        const enemyData = this._scenario; 
-        const enemyTypes = enemyData.map(e => e.type).filter(Boolean);
-        const uniqueTypes = [...new Set(enemyTypes)];
-
-        // 敵の基本画像を配列化 (boss_01 -> enemy_boss_01.webp)
-        const imagesToPreload = uniqueTypes.map(type => `enemy_${type}.webp`);
-
-        // 3. YAML直書きの固有追加アセットをマージ
-        if (Array.isArray(this.preloadAssets)) {
-            imagesToPreload.push(...this.preloadAssets);
-        }
-
-        // 4. キービジュアル画像の追加
-        if (this.kv) {
-            const kvPath = typeof this.kv === 'object' ? this.kv.path : this.kv;
-            if (kvPath) {
-                imagesToPreload.push(kvPath);
-            }
-        }
-
-        // 5. 既存の AssetManager を使って一括プリロードを実行
-        const finalImages = [...new Set(imagesToPreload)];
-        if (finalImages.length > 0) {
-            try {
-                await assetManager.preload(finalImages); 
-            } catch (assetError) {
-                // 💡 画像ロード自体のエラーをラップして原因を絞り込む
-                throw new Error(`Image asset preload failed. (Check files: ${finalImages.slice(0, 3).join(', ')}...)`);
-            }
-        }
-
-        // 6. 既存の AudioManager を使ってBGMをロード
-        if (this.bgm) {
-            try {
-                await audioManager.loadStageBGM(this.bgm);
-            } catch (audioError) {
-                throw new Error(`BGM load failed: "${this.bgm}"`);
-            }
-        }            
-
-        // 7. 既存の AudioManager を使ってシステムSEを一括プリロード
-        if (audioManager && typeof audioManager.preloadSE === 'function') {
-            try {
-                await audioManager.preloadSE();
-            } catch (seError) {
-                throw new Error(`SE preload failed. Check audio system.`);
-            }
-        }
-
-        return true;
-    } catch (error) {
-        console.error(`[ScenarioManager] Failed to load resources for stage ${stageNum}:`, error);
+    async loadStageResources(stageNum, assetManager, audioManager, assetBase) {
+        const fileName = `stage-${stageNum}/scenario.yaml`;
+        const scenarioPath = `${assetBase}${fileName}`;
         
-        // ✨ ここで catch した error のメッセージをインスタンスに保存します！
-        this.lastError = error.message; 
-        
-        return false;
+        // ✨ 新しいロードが始まるので、前回の残ったエラーをクリアする
+        this.lastError = null; 
+
+        try {
+            // 1. シナリオYAML自体のロード
+            const loadSuccess = await this.loadScenario(scenarioPath);
+            // 💡 どこで落ちたか分かりやすくするため、エラーメッセージを具体的に記載
+            if (!loadSuccess) throw new Error(`Failed to load scenario file: "${fileName}"`);
+
+            // 2. scenario配下から出現する敵の種類を自動スキャン
+            const enemyData = this._scenario; 
+            const enemyTypes = enemyData.map(e => e.type).filter(Boolean);
+            const uniqueTypes = [...new Set(enemyTypes)];
+
+            // 敵の基本画像を配列化 (boss_01 -> enemy_boss_01.webp)
+            const imagesToPreload = uniqueTypes.map(type => `enemy_${type}.webp`);
+
+            // 3. YAML直書きの固有追加アセットをマージ
+            if (Array.isArray(this.preloadAssets)) {
+                imagesToPreload.push(...this.preloadAssets);
+            }
+
+            // 4. キービジュアル画像の追加
+            if (this.kv) {
+                const kvPath = typeof this.kv === 'object' ? this.kv.path : this.kv;
+                if (kvPath) {
+                    imagesToPreload.push(kvPath);
+                }
+            }
+
+            // 5. 既存の AssetManager を使って一括プリロードを実行
+            const finalImages = [...new Set(imagesToPreload)];
+            if (finalImages.length > 0) {
+                try {
+                    await assetManager.preload(finalImages); 
+                } catch (assetError) {
+                    // 💡 画像ロード自体のエラーをラップして原因を絞り込む
+                    throw new Error(`Image asset preload failed. (Check files: ${finalImages.slice(0, 3).join(', ')}...)`);
+                }
+            }
+
+            // 6. 既存の AudioManager を使ってBGMをロード
+            if (this.bgm) {
+                try {
+                    await audioManager.loadStageBGM(this.bgm);
+                } catch (audioError) {
+                    throw new Error(`BGM load failed: "${this.bgm}"`);
+                }
+            }            
+
+            // 7. 既存の AudioManager を使ってシステムSEを一括プリロード
+            if (audioManager && typeof audioManager.preloadSE === 'function') {
+                try {
+                    await audioManager.preloadSE();
+                } catch (seError) {
+                    throw new Error(`SE preload failed. Check audio system.`);
+                }
+            }
+
+            return true;
+        } catch (error) {
+            console.error(`[ScenarioManager] Failed to load resources for stage ${stageNum}:`, error);
+            
+            // ✨ ここで catch した error のメッセージをインスタンスに保存します！
+            this.lastError = error.message; 
+            
+            return false;
+        }
     }
-}
 
     /** サウンドテスト用：特定のステージのYAMLからBGM名とステージ名だけをピンポイントで取得する */
     async peekStageMeta(stageNum, assetBase) {

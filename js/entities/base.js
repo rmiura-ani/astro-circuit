@@ -11,6 +11,9 @@
 /**
  * 全エンティティの基底クラス
  */
+/**
+ * 全エンティティの基底クラス
+ */
 class Entity {
     constructor(x, y, width, height) {
         this.x = x;
@@ -20,8 +23,37 @@ class Entity {
         this.active = true;
     }
 
-    // 画面外判定（上下左右の余白指定可能）
-    isOutOfBounds(margin = 50) {
+    /**
+     * 画面外および座標異常の共通判定
+     * @param {number} margin 通常エンティティの画面外許容マージン
+     * @param {boolean} isEnemy 敵固有のトリッキーな移動（左右・上への一時アウト）を許容するか
+     * @returns {boolean} 排除すべき対象（画面外・異常値）ならtrue
+     */
+    isOutOfBounds(margin, isEnemy = false) {
+        // 🛑 【最優先セーフティ】座標が NaN になったら無条件で即時排除
+        if (isNaN(this.x) || isNaN(this.y)) {
+            return true;
+        }
+
+        // 🛑 【敵専用ロジック】トリッキーな動きをする敵の場合
+        if (isEnemy) {
+            // 1. 下方向に完全に突き抜けたら消滅（既存の仕様を維持）
+            if (this.y > GAME_CONFIG.HEIGHT) {
+                return true;
+            }
+
+            // 2. 画面外から戻ってくる動きを許容しつつ、
+            //    絶対に戻ってこれない宇宙の彼方（3000px）に暴走した場合は強制排除
+            const ABSOLUTE_LIMIT = 3000;
+            if (this.x < -ABSOLUTE_LIMIT || this.x > ABSOLUTE_LIMIT || this.y < -ABSOLUTE_LIMIT) {
+                return true;
+            }
+
+            // 左右や上方向の通常のはみ出しは戻ってくる可能性があるので、ここではまだ false（画面内扱い）にする
+            return false;
+        }
+
+        // 🛑 【通常ロジック】自機、自機弾、敵弾などは四方のマージンを越えたら即消滅
         return (
             this.y > GAME_CONFIG.HEIGHT + margin || 
             this.y < -margin || 
@@ -46,7 +78,7 @@ class EnemyBullet extends Entity {
     update() {
         this.x += this.vx;
         this.y += this.vy;
-        if (this.isOutOfBounds()) this.active = false;
+        if (this.isOutOfBounds(50)) this.active = false;
     }
     /** 敵弾を描画する */
     draw(ctx) {

@@ -66,16 +66,57 @@ export class GameCollisionManager {
                     this.game.stats.shotsHit++;
 
                     if (enemy.takeDamage(1)) {
+                        // 敵破壊処理
                         this.game.stats.enemiesKilled++;
                         this._calculateAttachScore(enemy);
                         if (typeof enemy.onDie === 'function') enemy.onDie(this.game);
-                        if (enemy.isBoss) this.game.scenario.skipToAfterLoop();
+                        
+                        // 🛑 ボス撃破時のグランドフィナーレ・お片付け処理
+                        if (enemy.isBoss) {
+                            this.game.scenario.skipToAfterLoop();
+                            
+                            // 🌟 画面内・画面外（上空含む）すべての敵・敵弾を確実に一斉処理！
+                            this.game.entities.forEach(e => {
+                                // 自分自身（ボス自身）は除外
+                                if (e === enemy) return;
+
+                                // ① すべてのザコ敵の処理
+                                if (e instanceof Enemy && e.active) {
+                                    this.game.stats.enemiesKilled++;
+                                    this._calculateAttachScore(e); // 密着ボーナス等のスコア計算
+
+                                    // 🛑 【最適化】画面内に見えている敵だけ派手に誘爆、上空の未出現は静かに処理
+                                    const isVisible = (
+                                        e.y >= GAME_CONFIG.UI_HEADER_HEIGHT &&
+                                        e.y < GAME_CONFIG.HEIGHT &&
+                                        e.x >= 0 &&
+                                        e.x < GAME_CONFIG.WIDTH
+                                    );
+
+                                    if (isVisible) {
+                                        // 画面内の敵: 変数「e」のonDieを呼び出す (タイポ修正) / soundoff=trueで音を制御
+                                        if (typeof e.onDie === 'function') e.onDie(this.game, true);
+                                    }
+                                    
+                                    // 処理済みの敵を即座に非アクティブ化し、次フレームでの多段多重処理を徹底防止
+                                    e.active = false;
+                                }
+                                
+                                // ② すべての敵弾の処理（敵弾は即消去）
+                                if (e instanceof EnemyBullet) {
+                                    e.active = false;
+                                }
+                            });
+                            
+                            console.log("[Collision] Boss defeated. Smart cleanup completed without auditory overload.");
+                        }
                     } else {
+                        // 敵ヒット処理
                         const amount = 10;
                         this.game.score += amount;
                         if (this.game.sc.audio) this.game.sc.audio.playHitSound();
                         this.game.particles.push(new Particle(pBullet.x, pBullet.y));
-                        
+                        // ボスだけ "+10" スコア演出                        
                         if (enemy.isBoss) {
                             const scatterX = (Math.random() - 0.5) * 10;
                             const scatterY = (Math.random() - 0.5) * 10;
@@ -122,6 +163,7 @@ export class GameCollisionManager {
         
         this.game.scoreTexts.push(new ScoreText(centerX, centerY, amount));
 
+        // ボスはタイムボーナスがある
         if (enemy.isBoss){
             const elapsed = this.game.frame - this.game.bossStartTime;
             const limit = enemy.timeLimit || 3600;
@@ -136,7 +178,7 @@ export class GameCollisionManager {
         }
     }
 
-    createExplosion(x, y, enemy) {
+    createExplosion(x, y, enemy, soundoff = false) {
         const hp = enemy.maxHp || 1;
         const count = 10 + (hp * 2);
         const type = enemy.isBoss ? 'boss' : 'enemy';
@@ -145,7 +187,7 @@ export class GameCollisionManager {
             this.game.particles.push(new Particle(x, y, type));
         }
 
-        if (this.game.sc.audio) {
+        if (this.game.sc.audio && !soundoff) {
             this.game.sc.audio.playExplosion();
             if (hp >= 10) setTimeout(() => this.game.sc.audio.playExplosion(), 200);
             if (hp >= 50) setTimeout(() => this.game.sc.audio.playExplosion(), 400);

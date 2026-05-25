@@ -1,15 +1,14 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * game.js
- * 
- * Copyright (c) 2026 あに。部長 / Ryo Miura
+ * game.js - ゲーム全体を統括するメインクラス（エンディング枠超え演出拡張版）
+ * * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
 import { ScenarioManager } from './systems/scenario.js';
 import { GameUIManager } from './game-ui.js';
-import { GameCollisionManager }  from './game-collision.js';
+import { GameCollisionManager } from './game-collision.js';
 
 /**
  * ゲーム全体を統括するメインクラス
@@ -74,6 +73,7 @@ export class Game {
 
         this.currentStageNum = 1;
         this.isCleared = false;
+        this.isEnding = false;
         this.frame = 0;    
         this.isBossActive = false;
         this.bossStartTime = 0;
@@ -126,9 +126,8 @@ export class Game {
         this.sessionRecord.inputMode = initialInputMode;
 
         const success = await this.initStage(startStage);
-        if (!success) {
-            return; // 🛑 ロード失敗ならここで処理を中断（ゲームを開始しない）
-        }
+        if (!success) return; 
+
         Analytics.logLevelStart(this.sessionRecord);
         this.isRunning = true;
     }
@@ -140,6 +139,7 @@ export class Game {
         this.bossStartTime = 0;
         this.postBossTimer = 0; 
         this.isCleared = false;
+        this.isEnding = false;
         this.clearTimer = 0;
 
         try {
@@ -155,15 +155,13 @@ export class Game {
                 console.log(`Stage ${stageNum} "${this.scenario.stageName}" Started.`);
                 return true;
             } else {
-                // 例: scenario 側が最後のエラー内容を持っている場合
                 const errorReason = this.scenario.lastError || "Unknown asset loss.";
-                this.endSession(`LOAD ERROR: ${errorReason}`); // ✨ 原因を結合して渡す
+                this.endSession(`LOAD ERROR: ${errorReason}`); 
                 return false;
             }
         } catch (error) {
-            // プログラム的な例外（404エラーや構文エラーなど）が発生した場合
             console.error(error);
-            this.endSession(`LOAD CRASH: ${error.message}`); // ✨ エラーメッセージを画面に送る
+            this.endSession(`LOAD CRASH: ${error.message}`); 
             return false;
         }
     }
@@ -182,7 +180,7 @@ export class Game {
         if (this.escTimer) clearTimeout(this.escTimer);
 
         this.escCount++;
-        this.ui.visualEffectWarning(); // UI/演出コンポーネントへ移譲
+        this.ui.visualEffectWarning(); 
 
         if (this.escCount >= 2) {
             this.escCount = 0;
@@ -204,6 +202,7 @@ export class Game {
     /** メインループ表示更新 */
     update() {
         this.background.update(this.frame);
+ 
         if (!this.isRunning) return;
 
         this.frame++;
@@ -211,11 +210,10 @@ export class Game {
         this.scenario.update(this.frame, this);
 
         if (this.player.alive) {
-            this.collisions.check(); // 物理・衝突判定コンポーネントへ移譲
+            this.collisions.check(); 
             this.checkClearCondition();
             this.updateInputMode();
             
-            // スコアかすり・撃ち込み得点の同期
             const isFiring = this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isTouching;
             if (this.frame % 5 === 0 && !this.isBossActive) {
                 this.score += isFiring ? 20 : 30;   
@@ -237,7 +235,7 @@ export class Game {
         }
         this.updateEntities();
         this.updateScoreTexts();
-        this.ui.updateDebugInfo(); // デバッグ表示をUIコンポーネントへ移譲
+        this.ui.updateDebugInfo(); 
     }
 
     /** エンティティ更新 */
@@ -295,26 +293,24 @@ export class Game {
         if (this.isCleared) {
             this.clearTimer++;
             if (this.clearTimer === 180) { 
-                this.goToNextStage();
-            }        
+                if (this.currentStageNum < 7) {
+                    this.goToNextStage();
+                } else {
+                    this.isEnding = true;
+                }     
+            }
         }
     }
 
     /** 次ステージへ */
-    async goToNextStage() { // ✨ async を付与
-        if (this.currentStageNum < 7) {
-            this.currentStageNum++;
-            this.isCleared = false;
-            this.clearTimer = 0;
-            this.frame = 0; 
-            
-            // ✨ await でロード完了を待ち、失敗時は中断する
-            const success = await this.initStage(this.currentStageNum);
-            if (!success) return; 
-            
-        } else {
-            this.endSession("ALL STAGES CLEARED!");
-        }
+    async goToNextStage() { 
+        this.currentStageNum++;
+        this.isCleared = false;
+        this.clearTimer = 0;
+        this.frame = 0; 
+        
+        const success = await this.initStage(this.currentStageNum);
+        if (!success) return; 
     }
 
     /** 被弾ミス */
@@ -350,6 +346,7 @@ export class Game {
 
     /** 描画マスタ */
     draw() {
+        // 通常のゲーム画面を黒クリア
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT);
         this.background.draw(this.ctx);

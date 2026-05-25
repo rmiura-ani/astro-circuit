@@ -36,10 +36,7 @@ class Enemy extends Entity {
     /** 敵の移動と攻撃を管理する */
     update(game) {
         this.y += this.speed;
-        if (this.y > GAME_CONFIG.HEIGHT) {
-            this.active = false;
-            return;
-        }
+        if (this.isOutOfBounds(50, true)) { this.active = false; return; }
         if (this.active) {
             const isInFiringRange = this.y > 20 && this.y < 475;
             if (isInFiringRange) {
@@ -158,10 +155,10 @@ class Enemy extends Entity {
     }
 
     // 通常演出（特殊演出は各クラスで上書き）
-    onDie(game) {
+    onDie(game, soundoff = false) {
         const centerX = this.x + this.width / 2;
         const centerY = this.y + this.height / 2;
-        game.collisions.createExplosion(centerX, centerY, this);
+        game.collisions.createExplosion(centerX, centerY, this, soundoff);
     }
 }
 
@@ -240,7 +237,7 @@ class StationaryEnemy extends Enemy {
 
             case 'MOVE_OUT':
                 this.y -= 3;
-                if (this.y < -50) this.active = false;
+                if (this.isOutOfBounds(50, true)) this.active = false;
                 break;
         }
     }

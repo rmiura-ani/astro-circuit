@@ -632,3 +632,90 @@ canvas {
     0% { transform: translateY(80vh); }
     100% { transform: translateY(-100%); }
 }
+
+/* ==========================================================================
+   [CINEMATIC-HTML] : 全画面
+   ========================================================================== */
+#fullscreen-kv {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 500; /* Canvas(10)やHUD(150)を完全に置き去りにして最前面へ */
+    background-color: #000;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    opacity: 0;
+    transition: opacity 1.0s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+/* 文字全体のコンテナ（中央配置・ネオン発光） */
+.fullscreen-text-container {
+    text-align: center;
+    z-index: 510;
+    font-family: 'Press Start 2P', cursive;
+    pointer-events: none;
+}
+
+.fullscreen-title {
+    font-size: 3vw; /* ブラウザ幅に美しく比例 */
+    min-size: 20px;
+    color: #FFD700;
+    text-shadow: 
+        -2px -2px 0 #000,  2px -2px 0 #000,
+        -2px  2px 0 #000,  2px  2px 0 #000, /* 👈 まず文字の周りを真っ黒で強固にフチ取る */
+        0 0 15px rgba(255, 215, 0, 0.9),    /* 👈 その外側を強い金色の光で包む */
+        0 0 30px rgba(255, 128, 0, 0.7);    /* 👈 さらに広範囲をオレンジの光で包む */
+    margin: 0 0 20px 0;
+    letter-spacing: 2px;
+}
+
+.fullscreen-subtitle {
+    font-size: 1.5vw;
+    min-size: 11px;
+    color: #F8F8F8;
+    text-shadow: 
+        -1.5px -1.5px 0 #000,  1.5px -1.5px 0 #000,
+        -1.5px  1.5px 0 #000,  1.5px  1.5px 0 #000, /* 👈 少し細めの黒フチ */
+        0 0 10px rgba(255, 255, 255, 0.8);          /* 👈 白い光のエフェクト */
+    margin: 0;
+    opacity: 0.9;
+}
+
+/* 🚀 HTML側のドラマチック自機ワープアニメーション */
+#fullscreen-warp-player {
+    position: absolute;
+    bottom: -100px; /* 最初は画面の下の外側に隠す */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 64px;  /* ドットが綺麗に見えるジャストサイズ（お好みで調整） */
+    height: 64px;
+    image-rendering: pixelated; /* ドット絵のキレを維持 */
+    z-index: 505;
+}
+
+/* 自機が動く時のアニメーションクラス（JSから発動） */
+.trigger-warp {
+    /* 1秒かけて下から定位置(75%)へスッと登場 */
+    animation: player-entrance 1.0s cubic-bezier(0.25, 1, 0.5, 1) forwards,
+               /* 登場から5.5秒後、0.5秒の超絶爆速で宇宙の彼方へ消え去る */
+               player-warp-away 0.5s cubic-bezier(0.6, -0.28, 0.735, 0.045) 5.5s forwards;
+}
+
+@keyframes player-entrance {
+    0% { bottom: -100px; }
+    100% { bottom: 20%; } /* 下部20%の黄金比位置で待機 */
+}
+
+@keyframes player-warp-away {
+    0% { bottom: 20%; transform: translateX(-50%) scale(1); filter: brightness(1); }
+    50% { filter: brightness(3); } /* ワープの瞬間エネルギーで輝く */
+    100% { bottom: 120vh; transform: translateX(-50%) scale(0.3); opacity: 0; } /* 遥か彼方へ */
+}
