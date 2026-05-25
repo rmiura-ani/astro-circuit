@@ -7,7 +7,6 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-
 /**
  * プレイヤーが操作する自機クラス
  */

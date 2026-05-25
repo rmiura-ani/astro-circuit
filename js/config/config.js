@@ -7,11 +7,12 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+import { SoundTestManager } from './soundTest.js';
 
 /**
  * 設定画面（BIOS風）を管理するクラス
  */
-class ConfigManager {
+export class ConfigManager {
     constructor(sc) {
         this.sc = sc;
         this.isMode = false;

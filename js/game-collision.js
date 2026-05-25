@@ -7,7 +7,8 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-class GameCollisionManager {
+
+export class GameCollisionManager {
     constructor(game) {
         this.game = game;
     }

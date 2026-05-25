@@ -7,11 +7,12 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
 */
+import { ScenarioManager } from './../systems/scenario.js';
 
 /**
  * SoundTestManager: 設定画面内のサウンドテスト（BGM/SE）ロジックを専門に管理
  */
-class SoundTestManager {
+export class SoundTestManager {
     constructor(sc) {
         this.sc = sc;
         this.soundTestIndex = 0;

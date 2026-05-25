@@ -10,7 +10,7 @@
 /**
  * AudioManager: サウンドライフサイクル管理
  */
-class AudioManager {
+export class AudioManager {
     constructor(basePath) {
         this.basePath = basePath;
         this.currentBgm = null;

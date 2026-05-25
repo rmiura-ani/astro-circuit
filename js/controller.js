@@ -7,13 +7,17 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+import { InputManager } from './systems/input.js';
+import { AudioManager } from './systems/audio.js';
+import { ConfigManager } from './config/config.js';
+import { Game } from './game.js';
 
 /**
  * SystemController: ゲーム全体のライフサイクル・システム統合管理
  */
-class SystemController {
+export class SystemController {
     constructor() {
-        this.VERSION = "0.56";
+        this.VERSION = "0.57";
         this.canvas = document.getElementById('game-canvas');
 
         // URLパラメータの解析（GitHub上の別ブランチやタグをテストするため）
@@ -43,8 +47,6 @@ class SystemController {
         // サブシステムの初期化
         this.input = new InputManager(this.canvas);
         this.audio = new AudioManager(this.assetBase);
-        
-        // ConfigManagerのインスタンス化とロード
         this.config = new ConfigManager(this);
         this.config.loadConfig();
         
@@ -96,6 +98,31 @@ class SystemController {
         }
     }
 
+    /** main.js から呼ばれる起動エントリーポイント */ 
+    startLoop() {
+        const loop = () => {
+            this.update(); // 自身のアップデート処理へ
+            this.draw();   // 自身の描画処理へ
+            
+            requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+    }
+
+    /** システム全体の更新処理 */
+    update() {
+        if (this.game && this.game.isRunning) {
+            this.game.update();
+        }
+    }
+
+    /** システム全体の描画処理 */
+    draw() {
+        if (this.game && this.game.isRunning) {
+            this.game.draw();
+        }
+    }
+    
     /** イベントリスナー セットアップ */
     setupGlobalEvents() {
         document.getElementById('start-screen').addEventListener('click', () => this.handleProceed('MOUSE'));

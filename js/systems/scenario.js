@@ -11,7 +11,7 @@
 /**
  * ScenarioManager 敵キャラシナリオ管理
  */
-class ScenarioManager {
+export class ScenarioManager {
     constructor() {
         this.REQUIRED_VERSION = 0.3;
         this.reset();

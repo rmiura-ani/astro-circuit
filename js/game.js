@@ -7,11 +7,14 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+import { ScenarioManager } from './systems/scenario.js';
+import { GameUIManager } from './game-ui.js';
+import { GameCollisionManager }  from './game-collision.js';
 
 /**
- * ゲーム全体を統括するメインクラス（マネジメントに特化）
+ * ゲーム全体を統括するメインクラス
  */
-class Game {
+export class Game {
     constructor(controller) {
         this.sc = controller; // SystemControllerへの参照
         this.canvas = controller.canvas;
@@ -392,16 +395,3 @@ class Game {
         this.sc.startIdleTimer();
     }
 }
-
-// グローバルループ
-const sys = new SystemController();
-sys.init().then(() => {
-    const loop = () => {
-        if (sys.game && sys.game.isRunning) {
-            sys.game.update();
-            sys.game.draw();
-        }
-        requestAnimationFrame(loop);
-    };
-    loop();
-});

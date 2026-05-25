@@ -12,7 +12,7 @@
  * InputManager: 入力統合管理
  * キーボード、マウス、タッチの入力を正規化して保持します。
  */
-class InputManager {
+export class InputManager {
     constructor(canvas) {
         this.canvas = canvas;
         this.keys = new Set(); // Setを使って重複を防止
