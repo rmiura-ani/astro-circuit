@@ -39,7 +39,7 @@ export class Game {
 
     // --- スコア・ライフ制御（UI更新は game-ui.js へ委譲） ---
     set score(val) {
-        this._score = Math.min(val, 99999990);
+        this._score = val;
         this.ui.updateScoreUI();
     }
     get score() { return this._score; }
@@ -55,19 +55,18 @@ export class Game {
     reset() {
         this._score = 0;
         this.currentLives = this.sc.config.lives;
-        this.stats = { enemiesSpawned: 0, enemiesKilled: 0, shotsFired: 0, shotsHit: 0 };
+        this.stats = { enemiesSpawned: 0, enemiesKilled: 0, shotsFired: 0, shotsHit: 0, inputMode: "NONE" };
         this.isInvincibleCheat = this.sc.config.isInvincibleCheat;
 
         this.extendThreshold = this.sc.config.extend; 
         this.hasExtended = false;
         this.hasCounterStopped = false;
 
-        this.sessionRecord = {
+        this.missionConfig = {
             missionName: this.sc.tag,
             difficulty: this.sc.config.difficulty,
             extend: this.sc.config.extend,
             lives: this.sc.config.lives,
-            inputMode: "NONE",
             cheatUsed: this.sc.config.isInvincibleCheat
         };        
 
@@ -97,17 +96,7 @@ export class Game {
 
     /** ゲーム開始 */
     async start(initialInputMode, startStage = 1) {
-        document.getElementById('start-screen').style.display = 'none';
-        
-        const hiScoreDisplay = document.getElementById('hi-score-display');
-        if (hiScoreDisplay) hiScoreDisplay.classList.remove('counter-stop');
-
-        const livesDisplay = document.getElementById('lives-display');
-        if (livesDisplay) livesDisplay.style.display = 'block';
-
-        const weaponContainer = document.getElementById('weapon-container');
-        if (weaponContainer) weaponContainer.style.display = 'block';
-
+        this.ui.resetGameUIState();
         const diffParams = {
             'EASY': { enemySpeed: 0.8, fireRate: 0.7 },
             'NORMAL': { enemySpeed: 1.0, fireRate: 1.0 },
@@ -123,12 +112,12 @@ export class Game {
         window.addEventListener('keydown', this._boundKeyDown);
         window.addEventListener('mousedown', this._boundMouseDown);
         
-        this.sessionRecord.inputMode = initialInputMode;
+        this.stats.inputMode = initialInputMode;
 
         const success = await this.initStage(startStage);
         if (!success) return; 
 
-        Analytics.logLevelStart(this.sessionRecord);
+        Analytics.logLevelStart(this.missionConfig);
         this.isRunning = true;
     }
 
@@ -149,8 +138,8 @@ export class Game {
                 this.background.setup(this.scenario.bgColor, stageNum); 
                 if (this.sc.audio) this.sc.audio.playBGM(this.scenario.bgm);
                 
-                if (this.sessionRecord) {
-                    this.sessionRecord.missionName = this.sc.tag;
+                if (this.missionConfig) {
+                    this.missionConfig.missionName = this.sc.tag;
                 }
                 console.log(`Stage ${stageNum} "${this.scenario.stageName}" Started.`);
                 return true;
@@ -257,10 +246,10 @@ export class Game {
 
     /** 操作モードの動的記録 */
     updateInputMode() {
-        if (this.sessionRecord.inputMode === 'BOTH') return;
+        if (this.stats.inputMode === 'BOTH') return;
         const isKeyActive = (this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isPressed('ArrowUp'));
-        if (this.sessionRecord.inputMode === 'KEYBOARD' && this.sc.input.isTouching) this.sessionRecord.inputMode = 'BOTH';
-        else if (this.sessionRecord.inputMode === 'MOUSE' && isKeyActive) this.sessionRecord.inputMode = 'BOTH';
+        if (this.stats.inputMode === 'KEYBOARD' && this.sc.input.isTouching) this.stats.inputMode = 'BOTH';
+        else if (this.stats.inputMode === 'MOUSE' && isKeyActive) this.stats.inputMode = 'BOTH';
     }
 
     /** ボス戦スタート */
@@ -377,9 +366,10 @@ export class Game {
         window.removeEventListener('keydown', this._boundKeyDown);
         window.removeEventListener('mousedown', this._boundMouseDown);
 
-        Analytics.logLevelEnd(this.stats, this.sessionRecord, this.isCleared);
+        this.missionConfig.score = this.score;
+        Analytics.logLevelEnd(this.missionConfig, this.stats, this.score, this.isCleared);
 
-        Analytics.logPostScore(this.score, this.stageNum);
+        Analytics.logPostScore(this.score, this.currentStageNum);
         const isNew = this.score > this.sc.highScore && this.score > 0;
         if (isNew) {
             this.sc.highScore = this.score;

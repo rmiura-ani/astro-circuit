@@ -11,6 +11,7 @@
  * PROJECT: VOID-CIRCUIT
  * ga.js - Google Analytics 4 Wrapper
  */
+"use strict";
 
 const Analytics = {
     /**
@@ -41,29 +42,24 @@ const Analytics = {
         });
     },
 
-    /**
+     /**
      * ゲーム開始時の記録
-     * @param {Object} record - this.sessionRecord
      */
-    logLevelStart(record) {
+    logLevelStart(missionConfig) {
         this._send('level_start', {
-            level_name: record.missionName,
-            difficulty: record.difficulty,
-            extend_setting: record.extend,
-            initial_lives: record.lives,
-            input_mode: record.inputMode,
-            cheat_enabled: record.cheatUsed
+            level_name: missionConfig.missionName,
+            difficulty: missionConfig.difficulty,
+            cheat_enabled: missionConfig.cheatUsed, // ※end側は cheat_used
+            extend_setting: missionConfig.extend,
+            initial_lives: missionConfig.lives,
         });
     },
 
     /**
      * ゲーム終了（リザルト）の記録
-     * @param {Object} stats - this.stats (enemiesKilled, shotsFired, frame etc.)
-     * @param {Object} record - this.sessionRecord
-     * @param {boolean} isCleared - クリアフラグ
      */
-    logLevelEnd(stats, record, isCleared) {
-        // 命中率計算
+    logLevelEnd(missionConfig, stats, finalScore, isCleared) {
+        // (命中率、撃破率、生存時間の計算は省略)
         const accuracy = stats.shotsFired > 0 
             ? ((stats.shotsHit / stats.shotsFired) * 100).toFixed(3) 
             : "0.000";
@@ -77,15 +73,15 @@ const Analytics = {
         const playTime = stats.frame ? Math.floor(stats.frame / 60) : 0;
 
         this._send('level_end', {
-            level_name: record.missionName,
+            level_name: missionConfig.missionName,
+            difficulty: missionConfig.difficulty,
+            cheat_used: missionConfig.cheatUsed,
+            input_mode: stats.inputMode,
             success: isCleared,
-            score: stats.score || 0,
-            difficulty: record.difficulty,
-            accuracy: parseFloat(accuracy), // 数値として送信
-            kill_rate: parseFloat(killRate),
+            score: finalScore || 0,
             play_time: playTime,
-            input_mode: record.inputMode,
-            cheat_used: record.cheatUsed,
+            accuracy: parseFloat(accuracy), 
+            kill_rate: parseFloat(killRate),
             enemies_killed: stats.enemiesKilled,
             enemies_spawned: stats.enemiesSpawned
         });

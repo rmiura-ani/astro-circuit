@@ -39,21 +39,23 @@ export class ConfigManager {
         this.resetConfirmed = false;
     }
 
-    /** 設定画面を開く */
+/** 設定画面を開く */
     async open() {
         this.isMode = true;
-        this.startScreenEl.style.display = 'none';
-        this.screenEl.style.display = 'flex';
         
+        // 🚀 先にデータを構築して画面の裏でリストをパッと確定させておく
         this.items = Array.from(document.querySelectorAll('.config-item'));
-        this.setupMouseEvents();
-        
-        this.soundTest.setupAudioEndedListener(this.isMode);
-
-        // 🔄 リスト構築を待ってから、1回だけまとめて画面を正しく描画する
         await this.soundTest.buildDynamicSoundTestList();
+        
+        // 🚀 表示される前に描画を一度走らせ、最初から「正しい行間」にしておく
         this.refreshAllDisplay();
         this.updateSelection();
+        this.setupMouseEvents();
+        this.soundTest.setupAudioEndedListener(this.isMode);
+
+        // ✨ すべての準備が整ってから初めて画面をパッと出す
+        this.startScreenEl.style.display = 'none';
+        this.screenEl.style.display = 'flex';
 
         const eqCanvas = document.getElementById('eq-overlay-canvas');
         if (eqCanvas) {
@@ -289,24 +291,26 @@ export class ConfigManager {
                 const isRightArrow = e.target.classList.contains('right-arrow');
 
                 if (isLeftArrow || isRightArrow) {
+                    // ◀ または ▶ がジャストでタップされた場合
                     this.handleValueChange(isRightArrow);
                     if (this.sc.audio) this.sc.audio.playHitSound();
                     if (setting === 'sound') this.soundTest.playSE();
                 } else {
+                    // 🚀 矢印以外の場所（行全体）がタップされた場合
                     if (setting === 'bgm') {
+                        // BGM行は従来どおり再生/停止のトグル
                         this.toggleBGMAndTransform();
                         this.refreshDisplay(item);
                     } else if (setting === 'eq_low' || setting === 'eq_mid' || setting === 'eq_high') {
-                        const targetBand = setting.replace('eq_', '');
-                        if (this.sc.audio) {
-                            this.sc.audio.setEQGain(targetBand, 0);
-                            this.sc.audio.playHitSound();
-                        }
-                        this.refreshDisplay(item);
+                        // ✨ 【修正】EQもゼロリセットではなく、右方向（値が増える）へ動かす
+                        this.handleValueChange(true); 
+                        if (this.sc.audio) this.sc.audio.playHitSound();
                     } else if (this.OPTIONS[setting] || setting === 'audio_room' || setting === 'se_vol' || setting === 'bgm_vol') {
+                        // その他の設定項目も右方向へ進める
                         this.handleValueChange(true);
                         if (this.sc.audio) this.sc.audio.playHitSound();
                     } else {
+                        // EXIT や RESET_SCORE などのアクションを実行
                         this.handleAction();
                     }
                 }

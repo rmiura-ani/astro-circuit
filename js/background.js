@@ -7,6 +7,7 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+"use strict";
 
 // ==========================================
 // 1. 各ステージ背景の基底（ベース）クラス

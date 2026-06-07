@@ -17,7 +17,7 @@ import { Game } from './game.js';
  */
 export class SystemController {
     constructor() {
-        this.VERSION = "0.59";
+        this.VERSION = "0.60";
         this.canvas = document.getElementById('game-canvas');
 
         // URLパラメータの解析（GitHub上の別ブランチやタグをテストするため）
@@ -60,6 +60,7 @@ export class SystemController {
         const scoreBound = Math.min(val, 99999990);
         localStorage.setItem('void_circuit_highscore', scoreBound);
         
+        // game-ui がいない可能性があるため、直接更新
         const hiScoreEl = document.getElementById('hi-score-display');
         if (hiScoreEl) {
             hiScoreEl.classList.add('counter-stop');
@@ -68,9 +69,8 @@ export class SystemController {
     }
     
     get highScore() { 
-        return parseInt(localStorage.getItem('void_circuit_highscore')) || 0; 
+        return parseInt(localStorage.getItem('void_circuit_highscore'), 10) || 0; 
     }
-
     /** ハイスコアリセット */
     resetHighScore() {
         this.highScore = 0;
@@ -280,20 +280,20 @@ export class SystemController {
 
     /** ミッション名導出（未定義エラーへのセーフティを追加） */ 
     getMissionCode(isShare = false) {
-        const r = this.game?.sessionRecord;
-        if (!r) return `VC-${this.VERSION}-INIT`;
+        const c = this.game?.missionConfig;
+        const s = this.game?.stats;
 
         const diffMap = { 'EASY':'EZ', 'NORMAL':'NM', 'HARD':'HD', 'VERY HARD':'VH' };
-        const diffStr = diffMap[r.difficulty] || 'U';
-        const cheatStr = r.cheatUsed ? (isShare ? '(CHEAT)' : '(CHT)') : '';
-        const extendStr = r.extend === 'NONE' ? 'OFF' : `${(r.extend/1000000)}M`;
-        const livesStr = `${r.lives}L`;
-        const missionName = r.missionName.toUpperCase();
+        const diffStr = diffMap[c.difficulty] || 'U';
+        const cheatStr = c.cheatUsed ? (isShare ? '(CHEAT)' : '(CHT)') : '';
+        const extendStr = c.extend === 'NONE' ? 'OFF' : `${(c.extend/1000000)}M`;
+        const livesStr = `${c.lives}L`;
+        const missionName = c.missionName.toUpperCase();
 
         // 操作モード判定
         let controlSuffix = '-MK';
-        if (r.inputMode === 'MOUSE') controlSuffix = '-M';
-        if (r.inputMode === 'KEYBOARD') controlSuffix = '-K';
+        if (s.inputMode === 'MOUSE') controlSuffix = '-M';
+        if (s.inputMode === 'KEYBOARD') controlSuffix = '-K';
 
         return `${missionName}-${diffStr}${cheatStr}-${livesStr}-${extendStr}${controlSuffix}`;
     }

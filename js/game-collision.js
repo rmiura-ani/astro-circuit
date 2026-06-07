@@ -49,6 +49,7 @@ export class GameCollisionManager {
 
         // 敵の当たり判定（vs 自機弾）
         for (const enemy of enemies) {
+            if (!enemy.active) continue;
             if (
                 enemy.y + enemy.height < GAME_CONFIG.UI_HEADER_HEIGHT ||            
                 enemy.y >= GAME_CONFIG.HEIGHT ||          
@@ -60,7 +61,7 @@ export class GameCollisionManager {
 
             for (const pBullet of playerBullets) {
                 if (!pBullet.active) continue;
-
+                if (!enemy.active) break;
                 if (this._isHit(pBullet, enemy)) {
                     pBullet.active = false;
                     this.game.stats.shotsHit++;

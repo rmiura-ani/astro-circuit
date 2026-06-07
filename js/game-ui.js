@@ -11,22 +11,34 @@
 export class GameUIManager {
     constructor(game) {
         this.game = game;
-        
-        // 🌟 エンディング演出シーケンス制御用の内部プロパティ
-        this._endingPhase = 0;      // 0:未開始, 1:自機定位置移動, 2:KV表示＆7秒静寂, 3:超加速離脱, 4:画面外余韻
-        this._endingTimer = 0;      // フェーズ内の経過フレームカウンター
-        this._endingKvAlpha = 0;    // エンディング用KVの不透明度
-        this._endingKvImage = null;
+        this.resetGameUIState();
     }
 
-    // 🚀 再プレイ時（ゲーム開始時）に外部から呼び出せるリセットメソッドを新設！
-    resetEndingState() {
-        this._endingPhase = 0;      // 0:未開始 に強制リセット
-        this._endingTimer = 0;      // カウンターリセット
-        this._endingKvAlpha = 0;    // アルファ値リセット
+// 🚀 ゲーム開始時・リトライ時に呼び出し、UI全体の表示や演出状態を初期化する
+    resetGameUIState() {
+        // --- A. 【game.jsから引っ越し】ゲーム開始時の画面要素のトグル ---
+        const startScreen = document.getElementById('start-screen');
+        if (startScreen) startScreen.style.display = 'none';
+
+        const livesDisplay = document.getElementById('lives-display');
+        if (livesDisplay) livesDisplay.style.display = 'block';
+
+        const weaponContainer = document.getElementById('weapon-container');
+        if (weaponContainer) weaponContainer.style.display = 'block';
+
+        const scoreEl = document.getElementById('score-display');
+        if (scoreEl) scoreEl.classList.remove('counter-stop');
+
+        const hiScoreEl = document.getElementById('hi-score-display');
+        if (hiScoreEl) hiScoreEl.classList.remove('counter-stop');
+
+
+        // --- B. エンディング演出関連のリセット（既存のロジック） ---
+        this._endingPhase = 0;
+        this._endingTimer = 0;
+        this._endingKvAlpha = 0;
         this.game.isEnding = false;
 
-        // HTML側の全画面要素も、次回のプレイのために初期状態（非表示・クラス削除）に戻しておく
         const domKv = document.getElementById('fullscreen-kv');
         const warpPlayer = document.getElementById('fullscreen-warp-player');
         
@@ -40,17 +52,41 @@ export class GameUIManager {
         }
     }
 
-    updateScoreUI() {
+ updateScoreUI() {
+        // カンストの上限値を共通定義
+        const MAX_DISPLAY_SCORE = 99999990;
+
+        // --- 1. プレイヤーの現在スコア表示 ---
         const scoreEl = document.getElementById('score-display');
         if (scoreEl) {
-            scoreEl.innerText = `SCORE: ${this.game.score.toString().padStart(8, '0')}`;
-            if (this.game.score >= 99999990 && !this.game.hasCounterStopped) {
+            const displayScore = Math.min(this.game.score, MAX_DISPLAY_SCORE);
+            scoreEl.innerText = `SCORE: ${displayScore.toString().padStart(8, '0')}`;
+            
+            // カンストに達し、かつ「まだ音が鳴っていない瞬間」だけ一度だけ実行
+            if (this.game.score >= MAX_DISPLAY_SCORE && !this.game.hasCounterStopped) {
                 scoreEl.classList.add('counter-stop');
                 if (this.game.sc.audio) this.game.sc.audio.playPowerUp();
                 this.game.hasCounterStopped = true;
             }
+            // 💡 毎フレームの else { remove } はゲーム開始時のリセットに任せたので、丸ごと削除！
+        }
+
+        // --- 2. ハイスコア側の表示制御 ---
+        const hiScoreEl = document.getElementById('hi-score-display');
+        if (hiScoreEl) {
+            const currentHi = this.game.sc.highScore; 
+            const displayHiScore = Math.min(currentHi, MAX_DISPLAY_SCORE);
+            
+            hiScoreEl.innerText = `HI-SCORE: ${displayHiScore.toString().padStart(8, '0')}`;
+            
+            // ハイスコア側も、カンストした時だけクラスを付与
+            // （ゲーム開始時に白に戻っているため、超えた瞬間だけ付ければOK）
+            if (currentHi >= MAX_DISPLAY_SCORE) {
+                hiScoreEl.classList.add('counter-stop');
+            }
         }
         
+        // --- 3. エクステンド処理 ---
         if (!this.game.hasExtended && this.game.extendThreshold !== 'NONE' && this.game.score >= this.game.extendThreshold) {
             this.game.currentLives++;
             if (this.game.sc.audio) this.game.sc.audio.playPowerUp();
@@ -106,6 +142,13 @@ export class GameUIManager {
             bonusEl.style.color = "#888";
         }        
         document.getElementById('debug-load').innerText = this.game.entities.length + this.game.particles.length;
+
+        // 🌟 ここから追記：SPAWN と KILL の数値を画面に反映
+        const spawnEl = document.getElementById('debug-spawn');
+        if (spawnEl) spawnEl.innerText = this.game.stats.enemiesSpawned;
+
+        const killEl = document.getElementById('debug-kill');
+        if (killEl) killEl.innerText = this.game.stats.enemiesKilled;
     }
 
     drawOverlayMessages(ctx) {
@@ -185,7 +228,7 @@ export class GameUIManager {
                     this._endingPhase = 5; 
                     
                     // 次のプレイのために内部状態を完全リセット
-                    this.resetEndingState();
+                    this.resetGameUIState();
                     
                     // ゲーム容器をクレジット表示のために確実に復活させる
                     if (container) container.style.display = 'block';
