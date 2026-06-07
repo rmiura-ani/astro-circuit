@@ -9,10 +9,9 @@
  */
 "use strict";
 
-// ==========================================
-// 2. 戦略性を広げる個性派ザコクラス群
-// ==========================================
-
+// =================================================================
+// 1. StraightEnemy (直進型)
+// =================================================================
 class StraightEnemy extends Enemy {
     get imageName() { return "enemy_straight.webp"; }
     
@@ -20,8 +19,23 @@ class StraightEnemy extends Enemy {
         super(game, x, y, bulletType, 1); // HP=1
         this.speed = 2.5; 
     }
+
+    /**
+     * 動的生成用ファクトリメソッド
+     */
+    static create(game, x, y, bType, data = {}) {
+        return new StraightEnemy(game, x, y, bType);
+    }
+}
+// クラス定義の直後にレジストリへ登録
+if (typeof ENEMY_REGISTRY !== 'undefined') {
+    ENEMY_REGISTRY.set('straight', StraightEnemy);
 }
 
+
+// =================================================================
+// 2. SineEnemy (サイン波移動型)
+// =================================================================
 class SineEnemy extends Enemy {
     get imageName() { return "enemy_sine.webp"; }
 
@@ -33,13 +47,28 @@ class SineEnemy extends Enemy {
         this.frequency = 0.05;
     }
 
+    /**
+     * 動的生成用ファクトリメソッド
+     */
+    static create(game, x, y, bType, data = {}) {
+        const phase = data.phase !== undefined ? data.phase : 0;
+        return new SineEnemy(game, x, y, bType, phase);
+    }
+
     update(game) {
         super.update(game);
         this.x = this.baseX + Math.sin(this.phase) * this.amplitude;
         this.phase += this.frequency;
     }
 }
+if (typeof ENEMY_REGISTRY !== 'undefined') {
+    ENEMY_REGISTRY.set('sine', SineEnemy);
+}
 
+
+// =================================================================
+// 3. StationaryEnemy (固定砲台型)
+// =================================================================
 class StationaryEnemy extends Enemy {
     get imageName() { return "enemy_stationary.webp"; }
 
@@ -50,6 +79,16 @@ class StationaryEnemy extends Enemy {
         this.waitTime = waitTime;
         this.timer = 0;
         this.state = 'MOVE_IN';
+    }
+
+    /**
+     * 動的生成用ファクトリメソッド
+     */
+    static create(game, x, y, bType, data = {}) {
+        const hp = data.hp !== undefined ? data.hp : 1;
+        const stopY = data.stopY !== undefined ? data.stopY : 100;
+        const waitTime = data.waitTime !== undefined ? data.waitTime : 120;
+        return new StationaryEnemy(game, x, y, bType, hp, stopY, waitTime);
     }
 
     update(game) {
@@ -78,18 +117,29 @@ class StationaryEnemy extends Enemy {
         }
     }
 }
+if (typeof ENEMY_REGISTRY !== 'undefined') {
+    ENEMY_REGISTRY.set('stationary', StationaryEnemy);
+}
 
-/**
- * AssaultEnemy: 直進後、自機の高度に合わせて急激に軌道修正して体当たりを狙う突撃型
- */
+
+// =================================================================
+// 4. AssaultEnemy (突撃型)
+// =================================================================
 class AssaultEnemy extends Enemy {
     get imageName() { return "enemy_assault.webp"; }
 
     constructor(game, x, y, bulletType) {
         super(game, x, y, bulletType, 1);
-        this.state = 'FALL'; // FALL, CHARGE
+        this.state = 'FALL'; 
         this.vx = 0;
         this.vy = 3.0;
+    }
+
+    /**
+     * 動的生成用ファクトリメソッド
+     */
+    static create(game, x, y, bType, data = {}) {
+        return new AssaultEnemy(game, x, y, bType);
     }
 
     update(game) {
@@ -106,7 +156,7 @@ class AssaultEnemy extends Enemy {
                 const dist = Math.sqrt(dx * dx + dy * dy) || 1;
                 this.vx = (dx / dist) * 6.5; 
                 this.vy = (dy / dist) * 6.5;
-                if (game.sc.audio) game.sc.audio.playHitSound(); 
+                if (game.sc.audio) game.sc.audio.playShot(); 
             }
         }
 
@@ -115,10 +165,14 @@ class AssaultEnemy extends Enemy {
         }
     }
 }
+if (typeof ENEMY_REGISTRY !== 'undefined') {
+    ENEMY_REGISTRY.set('assault', AssaultEnemy);
+}
 
-/**
- * HunterEnemy: 常に自機のX座標を執拗に追従しながらゆっくり降下してくるハンター型
- */
+
+// =================================================================
+// 5. HunterEnemy (ハンター追従型)
+// =================================================================
 class HunterEnemy extends Enemy {
     get imageName() { return "enemy_hunter.webp"; }
 
@@ -127,6 +181,13 @@ class HunterEnemy extends Enemy {
         this.speedY = 1.0; 
         this.speedX = 1.5; 
         this.timer = 0;
+    }
+
+    /**
+     * 動的生成用ファクトリメソッド
+     */
+    static create(game, x, y, bType, data = {}) {
+        return new HunterEnemy(game, x, y, bType);
     }
 
     update(game) {
@@ -148,16 +209,27 @@ class HunterEnemy extends Enemy {
         if (this.y > game.height + 50) this.active = false;
     }
 }
+if (typeof ENEMY_REGISTRY !== 'undefined') {
+    ENEMY_REGISTRY.set('hunter', HunterEnemy);
+}
 
-/**
- * ShieldEnemy: 高耐久の盾。正面から弾を受けると「撃ち返し（カウンター）」を発生させる
- */
+
+// =================================================================
+// 6. ShieldEnemy (高耐久・盾型)
+// =================================================================
 class ShieldEnemy extends Enemy {
     get imageName() { return "enemy_shield.webp"; }
 
     constructor(game, x, y, bulletType) {
         super(game, x, y, bulletType, 5); 
         this.speedY = 0.6; 
+    }
+
+    /**
+     * 動的生成用ファクトリメソッド
+     */
+    static create(game, x, y, bType, data = {}) {
+        return new ShieldEnemy(game, x, y, bType);
     }
 
     takeDamage(amount) {
@@ -170,10 +242,14 @@ class ShieldEnemy extends Enemy {
         return isDead;
     }
 }
+if (typeof ENEMY_REGISTRY !== 'undefined') {
+    ENEMY_REGISTRY.set('shield', ShieldEnemy);
+}
 
-/**
- * ScoutEnemy: 画面外からUの字を描いて索敵し、弾を撒いて上部へ去っていく偵察型
- */
+
+// =================================================================
+// 7. ScoutEnemy (Uターン偵察型)
+// =================================================================
 class ScoutEnemy extends Enemy {
     get imageName() { return "enemy_scout.webp"; }
 
@@ -183,6 +259,14 @@ class ScoutEnemy extends Enemy {
         this.isLeft = isLeftToRight;
         this.x = isLeftToRight ? -32 : game.width + 32; 
         this.y = 80;
+    }
+
+    /**
+     * 動的生成用ファクトリメソッド
+     */
+    static create(game, x, y, bType, data = {}) {
+        const isLeftToRight = data.isLeftToRight !== undefined ? data.isLeftToRight : true;
+        return new ScoutEnemy(game, x, y, bType, isLeftToRight);
     }
 
     update(game) {
@@ -204,684 +288,469 @@ class ScoutEnemy extends Enemy {
         if (this.x < -60 || this.x > game.width + 60) this.active = false;
     }
 }
+if (typeof ENEMY_REGISTRY !== 'undefined') {
+    ENEMY_REGISTRY.set('scout', ScoutEnemy);
+}
 
-// ==========================================
-// 3.  各ステージのボス実体
-// ==========================================
 
-/**
- * STAGE-1 ボス: アイアン・ヴェイン防衛コア
- */
-class BossEnemy_01 extends BossEnemy {
-    get imageName() { return "enemy_boss_01.webp"; }
+// =================================================================
+// [STAGE-2] 21. CrystalEnemy (ジグザグ移動・クリスタル型)
+// =================================================================
+class CrystalEnemy extends Enemy {
+    get imageName() { return "enemy_crystal.webp"; }
 
-    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        y = -128;
-        super(game, x, y, hp, timeLimit, timeMultiplier);
-        this.isBoss = true;
-        this.width = 128;
-        this.height = 128;
-        this.hitWidth = 96; 
-        this.hitHeight = 96;
-
-        this.state = 'APPEAR'; 
+    constructor(game, x, y, bulletType, stopY = 150, waitTime = 60) {
+        super(game, x, y, bulletType, 2); // クリスタルらしくHPは少し固めの2
+        this.stopY = stopY;
+        this.waitTime = waitTime;
         this.timer = 0;
-        this.baseX = x;
-        this.moveRange = 100;
-        this.speed = 1.0;
+        
+        // 状態管理: 'DIAGONAL_IN' (斜め降下) -> 'STOP' (停止・射撃) -> 'DIAGONAL_OUT' (斜め離脱)
+        this.state = 'DIAGONAL_IN'; 
+        
+        // 侵入時の左右ベクトル（画面の左右どちらにいるかで自動決定）
+        this.vx = (x < game.width / 2) ? 1.5 : -1.5;
+        this.vy = 2.0;
+    }
+
+    /**
+     * 動的生成用ファクトリメソッド
+     */
+    static create(game, x, y, bType, data = {}) {
+        const stopY = data.stopY !== undefined ? data.stopY : 150;
+        const waitTime = data.waitTime !== undefined ? data.waitTime : 60;
+        return new CrystalEnemy(game, x, y, bType, stopY, waitTime);
     }
 
     update(game) {
         if (!this.active) return;
-        this.timer++;
 
         switch (this.state) {
-            case 'APPEAR':
-                this.y += 0.5;
-                if (this.y >= 40) {
-                    this.state = 'ATTACK_01';
-                    this.timer = 0;
-                }
-                break;
-
-            case 'ATTACK_01':
-                this.x = this.baseX + Math.sin(this.timer * 0.02) * this.moveRange;
-                if (this.timer % 40 === 0) this.shoot(game);
+            case 'DIAGONAL_IN':
+                this.x += this.vx;
+                this.y += this.vy;
                 
-                if (this.hp < this.maxHp / 2) {
-                    this.state = 'ATTACK_02';
+                // 指定のY座標まで斜めに降りたら停止状態へ
+                if (this.y >= this.stopY) {
+                    this.state = 'STOP';
                 }
                 break;
 
-            case 'ATTACK_02':
-                this.x += (this.baseX - this.x) * 0.05;
-                if (this.timer % 20 === 0) {
-                    this.bulletType = 'eight-way';
-                    this.shoot(game);
-                }
-                break;
-        }
-    }
-
-    draw(ctx, isInvincibleCheat = false) {
-        ctx.save();
-        if (this.state === 'ATTACK_02') {
-            ctx.filter = 'hue-rotate(150deg) saturate(2) brightness(1.2)';
-        }
-        super.draw(ctx, isInvincibleCheat);
-        ctx.restore(); 
-    }
-
-    onDie(game) {
-        for (let i = 0; i < 5; i++) {
-            setTimeout(() => {
-                game.collisions.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 50 });
-            }, i * 200);
-        }
-    }
-}
-
-/**
- * STAGE-2 ボス: 碧琥珀の潜航母艦
- */
-class BossEnemy_02 extends BossEnemy {
-    get imageName() { return "enemy_boss_02.webp"; }
-
-    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        y = -128;
-        super(game, x, y, hp, timeLimit, timeMultiplier);
-        this.isBoss = true;
-        this.width = 140;
-        this.height = 96;
-        this.hitWidth = 110;
-        this.hitHeight = 70;
-
-        this.state = 'APPEAR'; 
-        this.timer = 0;
-        this.baseX = x;
-        this.alpha = 1.0; 
-    }
-
-    update(game) {
-        if (!this.active) return;
-        this.timer++;
-
-        switch (this.state) {
-            case 'APPEAR':
-                this.y += 0.8;
-                if (this.y >= 50) {
-                    this.state = 'ATTACK_NORMAL';
-                    this.timer = 0;
-                }
-                break;
-
-            case 'ATTACK_NORMAL':
-                this.x = this.baseX + Math.sin(this.timer * 0.03) * 80;
-                if (this.timer % 30 === 0) {
-                    this.bulletType = 'aim';
-                    this.shoot(game);
-                }
-                if (this.timer > 300) {
-                    this.state = 'DIVE';
-                    this.timer = 0;
-                }
-                break;
-
-            case 'DIVE':
-                this.alpha -= 0.02;
-                if (this.alpha <= 0.2) {
-                    this.alpha = 0.2;
-                    this.isInvincible = true; 
-                    this.x = Math.random() * (game.width - this.width);
-                    this.state = 'SURFACE';
-                    this.timer = 0;
-                }
-                break;
-
-            case 'SURFACE':
-                if (this.timer > 120) {
-                    this.alpha += 0.04;
-                    if (this.alpha >= 1.0) {
-                        this.alpha = 1.0;
-                        this.isInvincible = false; 
-                        this.state = 'ATTACK_NORMAL';
-                        this.timer = 0;
-                        this.bulletType = 'eight-way';
-                        this.shoot(game);
-                    }
-                }
-                break;
-        }
-    }
-
-    draw(ctx, isInvincibleCheat = false) {
-        ctx.save();
-        ctx.globalAlpha = this.alpha;
-        if (this.isInvincible) {
-            ctx.filter = 'blur(3px) brightness(0.6) saturate(0.5) hue-rotate(200deg)';
-        }
-        super.draw(ctx, isInvincibleCheat);
-        ctx.restore();
-    }
-
-    onDie(game) {
-        for (let i = 0; i < 8; i++) {
-            setTimeout(() => {
-                game.collisions.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 80 });
-            }, i * 150);
-        }
-    }
-}
-
-/**
- * STAGE-3 ボス: 蒼穹龍神（Soukyu Ryujin）
- * 特徴: 165BPMのハイスピードメタル、ファンファーレと同調した、激しいS字蛇行と高速突進を仕掛けるアグレッシブ龍。
- */
-class BossEnemy_03 extends BossEnemy {
-    get imageName() { return "enemy_boss_03.webp"; }
-
-    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        y = -160;
-        super(game, x, y, hp, timeLimit, timeMultiplier);
-        this.isBoss = true;
-        this.width = 160;
-        this.height = 128;
-        this.hitWidth = 120;
-        this.hitHeight = 90;
-
-        this.state = 'APPEAR';
-        this.timer = 0;
-        this.baseX = x;
-    }
-
-    update(game) {
-        if (!this.active) return;
-        this.timer++;
-
-        switch (this.state) {
-            case 'APPEAR':
-                this.y += 1.5; // 高速進入
-                if (this.y >= 60) {
-                    this.state = 'SINE_DRIVE';
-                    this.timer = 0;
-                }
-                break;
-
-            case 'SINE_DRIVE':
-                // メタルなベースラインに合わせた高速な∞の字（ないし大きなS字）運動
-                this.x = this.baseX + Math.sin(this.timer * 0.06) * 100;
-                this.y = 60 + Math.cos(this.timer * 0.03) * 30;
-
-                if (this.timer % 24 === 0) {
-                    this.bulletType = 'triple';
-                    this.shoot(game);
-                }
-
-                // 400Fごとに、ブラススタブ炸裂を思わせる急降下体当たり突撃を発動
-                if (this.timer > 400) {
-                    this.state = 'DRAGON_CHARGE';
-                    this.timer = 0;
-                }
-                break;
-
-            case 'DRAGON_CHARGE':
-                // 画面下部へ一気に牙を剥いて突撃
-                this.y += 6.0;
-                if (this.timer % 10 === 0) {
-                    this.bulletType = 'eight-way';
-                    this.shoot(game);
-                }
-                if (this.y >= 320) {
-                    this.state = 'RETREAT';
-                    this.timer = 0;
-                }
-                break;
-
-            case 'RETREAT':
-                // 定位置（上空）へと滑らかに戻っていく
-                this.y -= 3.0;
-                this.x += (this.baseX - this.x) * 0.05;
-                if (this.y <= 60) {
-                    this.y = 60;
-                    this.state = 'SINE_DRIVE';
-                    this.timer = 0;
-                }
-                break;
-        }
-    }
-
-    onDie(game) {
-        for (let i = 0; i < 12; i++) {
-            setTimeout(() => {
-                game.collisions.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 100 });
-            }, i * 100);
-        }
-    }
-}
-
-/**
- * STAGE-4 ボス: 地上絵守護神（Ancient Golem）
- * 特徴: トライバルテクノとラスタスクロール（砂塵）。幾何学的な位置停止（フォーメーション）と、ビット反射弾。
- */
-class BossEnemy_04 extends BossEnemy {
-    get imageName() { return "enemy_boss_04.webp"; }
-
-    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        y = -128;
-        super(game, x, y, hp, timeLimit, timeMultiplier);
-        this.isBoss = true;
-        this.width = 128;
-        this.height = 128;
-        this.hitWidth = 100;
-        this.hitHeight = 100;
-
-        this.state = 'APPEAR';
-        this.timer = 0;
-        this.baseX = x;
-        this.points = [
-            {x: x - 80, y: 50},
-            {x: x + 80, y: 120},
-            {x: x, y: 80}
-        ];
-        this.targetPointIndex = 0;
-    }
-
-    update(game) {
-        if (!this.active) return;
-        this.timer++;
-
-        switch (this.state) {
-            case 'APPEAR':
-                this.y += 0.8;
-                if (this.y >= 50) {
-                    this.state = 'PATROL_PATTERN';
-                    this.timer = 0;
-                }
-                break;
-
-            case 'PATROL_PATTERN':
-                // 幾何学的な遺跡の地上絵をなぞるように、ターゲット座標へ向けてカクカクと移動
-                const target = this.points[this.targetPointIndex];
-                const dx = target.x - this.x;
-                const dy = target.y - this.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-
-                if (dist > 4) {
-                    this.x += (dx / dist) * 2.0;
-                    this.y += (dy / dist) * 2.0;
-                } else {
-                    // 到着したら次の一歩、および強力なサークル古代弾幕
-                    this.targetPointIndex = (this.targetPointIndex + 1) % this.points.length;
-                    this.bulletType = 'eight-way';
-                    this.shoot(game);
-                }
-
-                if (this.timer % 35 === 0) {
-                    this.bulletType = 'triple';
-                    this.shoot(game);
-                }
-                break;
-        }
-    }
-
-    onDie(game) {
-        for (let i = 0; i < 10; i++) {
-            setTimeout(() => {
-                game.collisions.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 120 });
-            }, i * 120);
-        }
-    }
-}
-
-/**
- * STAGE-5 ボス: 生体DNAコア（Planetary Pulse）
- * 特徴: サイケデリック、バイオレットのパルス明滅。HPの減少に伴って「細胞分裂（ビットを飛ばす）」を行う。
- */
-class BossEnemy_05 extends BossEnemy {
-    get imageName() { return "enemy_boss_05.webp"; }
-
-    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        y = -128;
-        super(game, x, y, hp, timeLimit, timeMultiplier);
-        this.isBoss = true;
-        this.width = 110;
-        this.height = 110;
-        this.hitWidth = 90;
-        this.hitHeight = 90;
-
-        this.state = 'APPEAR';
-        this.timer = 0;
-        this.baseX = x;
-        this.hasSplit = false;
-    }
-
-    update(game) {
-        if (!this.active) return;
-        this.timer++;
-
-        switch (this.state) {
-            case 'APPEAR':
-                this.y += 0.6;
-                if (this.y >= 60) {
-                    this.state = 'PULSE_WAVE';
-                    this.timer = 0;
-                }
-                break;
-
-            case 'PULSE_WAVE':
-                // 呼吸するようにゆったり上下左右に揺れる
-                this.x = this.baseX + Math.sin(this.timer * 0.02) * 60;
-                this.y = 60 + Math.cos(this.timer * 0.04) * 20;
-
-                // 粘着質なシンセアルペジオと同調した連射弾
-                if (this.timer % 15 === 0) {
-                    this.bulletType = 'aim';
-                    this.shoot(game);
-                }
-
-                // 🧬 ギミック: HPが半分を切ると、おぞましい細胞分裂エフェクトとともに弾幕が常時激化
-                if (!this.hasSplit && this.hp < this.maxHp / 2) {
-                    this.hasSplit = true;
-                    this.fireRateMultiplier = 2.0; // 攻撃速度が2倍へ昇華
-                    if (game.sc.audio) game.sc.audio.playHitSound();
-                }
-
-                if (this.hasSplit && this.timer % 40 === 0) {
-                    this.bulletType = 'eight-way';
-                    this.shoot(game);
-                }
-                break;
-        }
-    }
-
-    draw(ctx, isInvincibleCheat = false) {
-        ctx.save();
-        // 分裂（暴走）後は不気味な紫色に輝き、激しく脈動（スケール変化）する
-        if (this.hasSplit) {
-            const scale = 1.0 + Math.sin(this.timer * 0.2) * 0.06;
-            ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
-            ctx.scale(scale, scale);
-            ctx.translate(-(this.x + this.width / 2), -(this.y + this.height / 2));
-            ctx.filter = 'hue-rotate(280deg) saturate(2.5) brightness(1.1)';
-        }
-        super.draw(ctx, isInvincibleCheat);
-        ctx.restore();
-    }
-
-    onDie(game) {
-        for (let i = 0; i < 14; i++) {
-            setTimeout(() => {
-                game.collisions.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 110 });
-            }, i * 90);
-        }
-    }
-}
-
-/**
- * STAGE-6 ボス: 超巨大空中戦艦（Burning Dread）
- * 特徴: 激しいスラッシュメタルベース、大気圏の赤熱。画面上部をほぼ完全に埋める要塞級ボス。主砲群の破壊による発狂モード。
- */
-class BossEnemy_06 extends BossEnemy {
-    get imageName() { return "enemy_boss_06.webp"; }
-
-    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        y = -180;
-        super(game, x, y, hp, timeLimit, timeMultiplier);
-        this.isBoss = true;
-        this.width = 240; // 圧倒的巨体
-        this.height = 140;
-        this.hitWidth = 200;
-        this.hitHeight = 100;
-
-        this.state = 'APPEAR';
-        this.timer = 0;
-        this.baseX = x - 50; // 中心に収まるように補正
-        this.x = this.baseX;
-    }
-
-    update(game) {
-        if (!this.active) return;
-        this.timer++;
-
-        switch (this.state) {
-            case 'APPEAR':
-                this.y += 0.4; // 巨大ゆえに重々しく進入
-                if (this.y >= 20) {
-                    this.state = 'HEAVY_BOMBARD';
-                    this.timer = 0;
-                }
-                break;
-
-            case 'HEAVY_BOMBARD':
-                // メタルのリフに合わせ、細かく激しくブレる（主砲の反動を表現）
-                this.x = this.baseX + Math.sin(this.timer * 0.1) * 15;
-
-                // 左砲門・右砲門・中央主砲からの波状弾幕
-                if (this.timer % 30 === 0) {
-                    this.bulletType = 'triple';
-                    this.shoot(game);
-                }
-
-                // HPが30%以下になると対空全開（発狂モード）
-                if (this.hp < this.maxHp * 0.3) {
-                    this.state = 'OVERDRIVE';
-                }
-                break;
-
-            case 'OVERDRIVE':
-                this.x = this.baseX + Math.sin(this.timer * 0.2) * 30; // 激しい狂い揺れ
-                if (this.timer % 12 === 0) {
-                    this.bulletType = 'eight-way';
-                    this.shoot(game);
-                }
-                if (this.timer % 20 === 0) {
-                    this.bulletType = 'straight';
-                    this.shoot(game);
-                }
-                break;
-        }
-    }
-
-    draw(ctx, isInvincibleCheat = false) {
-        ctx.save();
-        if (this.state === 'OVERDRIVE') {
-            ctx.filter = 'saturate(3) contrast(1.5) brightness(1.3)'; // 炎上・真っ赤に過熱
-        }
-        super.draw(ctx, isInvincibleCheat);
-        ctx.restore();
-    }
-
-    onDie(game) {
-        // 巨大戦艦崩壊の、鳴り止まない大誘爆演出
-        for (let i = 0; i < 24; i++) {
-            setTimeout(() => {
-                game.collisions.createExplosion(this.x + Math.random() * this.width, this.y + Math.random() * this.height, { maxHp: 150 });
-            }, i * 80);
-        }
-    }
-}
-
-/**
- * STAGE-7 ボス: 最終要塞機械心臓（Absolute Core）
- * 特徴: 荘厳なFMオルガン。最終形態への「完全形態変化（トランスフォーム）」をサポートする神。
- */
-class BossEnemy_07 extends BossEnemy {
-    get imageName() { return "enemy_boss_07_phase1.webp"; }
-
-    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        y = -160;
-        super(game, x, y, hp, timeLimit, timeMultiplier);
-        this.isBoss = true;
-        this.width = 160;
-        this.height = 160;
-        this.hitWidth = 120;
-        this.hitHeight = 120;
-
-        this.state = 'APPEAR';
-        this.timer = 0;
-        this.baseX = x;
-        this.formPhase = 1; // 1: 第一形態, 2: 最終形態
-    }
-
-    update(game) {
-        if (!this.active) return;
-        this.timer++;
-
-        switch (this.state) {
-            case 'APPEAR':
-                this.y += 0.5;
-                if (this.y >= 30) {
-                    this.state = 'CORE_PHASE_1';
-                    this.timer = 0;
-                }
-                break;
-
-            case 'CORE_PHASE_1':
-                // 画面中央に絶対君臨。グリッド線の流れの中で静かに威圧弾幕を放つ
-                this.x = this.baseX + Math.sin(this.timer * 0.01) * 30;
-
-                if (this.timer % 40 === 0) {
-                    this.bulletType = 'eight-way';
-                    this.shoot(game);
-                }
-                if (this.timer % 25 === 0) {
-                    this.bulletType = 'aim';
-                    this.shoot(game);
-                }
-
-                // ⚡ ギミック：HPが半分を切ると、BGMのサビ展開に完全に同期して【最終形態に完全変形】
-                if (this.hp < this.maxHp / 2) {
-                    this.formPhase = 2;
-                    this.state = 'TRANSFORM_演出';
-                    this.timer = 0;
-                }
-                break;
-
-            case 'TRANSFORM_演出':
-                // 変形中の2秒間は、ボスが激しくフラッシュして全画面を圧倒（無敵・攻撃停止）
-                this.isInvincible = true;
-                this.x = this.baseX + Math.sin(this.timer * 0.5) * 4; // 高速振動
+            case 'STOP':
+                this.timer++;
                 
-                if (this.timer > 120) {
-                    this.isInvincible = false;
-                    this.state = 'FINAL_OVERLORD';
-                    this.timer = 0;
-                    // 画像アセットのリロード（倉庫から最終形態のグラフィックを引き出す）
-                    this.image = game.assets.get("enemy_boss_07_phase2.webp") || this.image;
+                // 停止の瞬間にすかさず弾を撃つ
+                if (this.timer === 1) {
+                    this.shoot(game);
+                }
+
+                // 一定時間停止したら、再度斜め移動（離脱）を開始
+                if (this.timer >= this.waitTime) {
+                    this.state = 'DIAGONAL_OUT';
+                    // 離脱時は、進入時とは反対の横方向ベクトルに変えてジグザグにする
+                    this.vx = -this.vx; 
+                    this.vy = 1.5;
                 }
                 break;
 
-            case 'FINAL_OVERLORD':
-                // 機械心臓の最終暴走。全方位8方向×2重、および極限の3WAYをノンストップ掃射
-                this.x = this.baseX + Math.sin(this.timer * 0.04) * 80;
-                this.y = 30 + Math.cos(this.timer * 0.03) * 15;
+            case 'DIAGONAL_OUT':
+                this.x += this.vx;
+                this.y += this.vy;
 
-                if (this.timer % 15 === 0) {
-                    this.bulletType = 'eight-way';
-                    this.shoot(game);
+                // 画面外に出たら消滅
+                if (this.y > game.height + 50 || this.x < -50 || this.x > game.width + 50) {
+                    this.active = false;
                 }
-                if (this.timer % 10 === 0) {
-                    this.bulletType = 'triple';
-                    this.shoot(game);
+                break;
+        }
+    }
+}
+if (typeof ENEMY_REGISTRY !== 'undefined') {
+    ENEMY_REGISTRY.set('crystal', CrystalEnemy);
+}
+
+
+// =================================================================
+// 🆕 [STAGE-2] 22. SkimmerEnemy (水面ホバー型・スキマー)
+// =================================================================
+class SkimmerEnemy extends Enemy {
+    get imageName() { return "enemy_skimmer.webp"; }
+
+    constructor(game, x, y, bulletType, stopY = 240, slideSpeed = 4.0) {
+        super(game, x, y, bulletType, 2); // 画面を広く使うため、少し粘るHP=2
+        this.stopY = stopY;
+        this.slideSpeed = slideSpeed;
+        
+        this.state = 'DESCEND'; // 'DESCEND' (高速降下) -> 'SLIDE' (横滑り往復射撃)
+        this.dir = (x < game.width / 2) ? 1 : -1; // 出現位置に応じて初期の横移動方向を決定
+        this.timer = 0;
+    }
+
+    /**
+     * 動的生成用ファクトリメソッド
+     * YAMLから水面ライン(stopY)やスライド速度(slideSpeed)を調整可能
+     */
+    static create(game, x, y, bType, data = {}) {
+        const stopY = data.stopY !== undefined ? data.stopY : 240; // 画面中央付近を想定
+        const slideSpeed = data.slideSpeed !== undefined ? data.slideSpeed : 4.0;
+        return new SkimmerEnemy(game, x, y, bType, stopY, slideSpeed);
+    }
+
+    update(game) {
+        if (!this.active) return;
+
+        switch (this.state) {
+            case 'DESCEND':
+                // 水面ラインまで高速降下 (通常のStationary等より速い)
+                this.y += 5.0;
+                if (this.y >= this.stopY) {
+                    this.y = this.stopY;
+                    this.state = 'SLIDE';
+                }
+                break;
+
+            case 'SLIDE':
+                this.timer++;
+                
+                // 横方向に高速スライド移動
+                this.x += this.slideSpeed * this.dir;
+
+                // 画面端（マージン40px）に到達したら反転
+                if (this.x < 40) {
+                    this.x = 40;
+                    this.dir = 1;
+                } else if (this.x > game.width - 40) {
+                    this.x = game.width - 40;
+                    this.dir = -1;
+                }
+
+                // 一定間隔で下方向に「水しぶき弾（扇状3WAY）」を撃ち込む
+                // 既存の射撃レート倍率を考慮。デフォルトで約40フレーム毎
+                const interval = Math.max(15, 40 / this.fireRateMultiplier);
+                if (this.timer % Math.floor(interval) === 0) {
+                    this.shootSplash3Way(game);
                 }
                 break;
         }
     }
 
-    draw(ctx, isInvincibleCheat = false) {
-        ctx.save();
-        if (this.state === 'TRANSFORM_演出') {
-            // 変形フラッシュ：モノクロ化＋超高輝度
-            ctx.filter = `contrast(3) brightness(${2.0 + Math.sin(this.timer * 0.8) * 1.0})`;
-        } else if (this.formPhase === 2) {
-            // 最終形態：禍々しいネオンレッドのエフェクト
-            ctx.filter = 'hue-rotate(0deg) saturate(3) contrast(1.3) drop-shadow(0px 0px 15px #F00)';
-        }
-        super.draw(ctx, isInvincibleCheat);
-        ctx.restore();
+    /**
+     * 下方向への扇状3WAY（水しぶき弾）の発射ロジック
+     */
+    shootSplash3Way(game) {
+        if (typeof EnemyBullet === 'undefined') return;
+        if (game.sc && game.sc.audio) game.sc.audio.playShot(); // 必要に応じてSE再生
+
+        const bulletSpeed = 3.5;
+        // 真下（90度 = PI/2）を基準に、左右に約20度（0.35ラジアン）の傾きを持たせる
+        const baseAngle = Math.PI / 2;
+        const spreadAngle = 0.35; 
+        const angles = [baseAngle - spreadAngle, baseAngle, baseAngle + spreadAngle];
+
+        angles.forEach(angle => {
+            const vx = Math.cos(angle) * bulletSpeed;
+            const vy = Math.sin(angle) * bulletSpeed;
+            
+            // 既存の弾生成ロジックの引数(x, y, vx, vy)に合わせてインスタンス化
+            // ※既存のthis.shoot()が(game)のみで内部処理している場合、
+            //  ここに game.entities.push(new EnemyBullet(...)) を直接流し込みます
+            game.entities.push(new EnemyBullet(this.x, this.y, vx, vy));
+        });
+    }
+}
+if (typeof ENEMY_REGISTRY !== 'undefined') {
+    ENEMY_REGISTRY.set('skimmer', SkimmerEnemy);
+}
+
+
+// =================================================================
+// 🆕 [STAGE-2] 23. DiverEnemy (潜水急浮上型・ダイバー)
+// =================================================================
+class DiverEnemy extends Enemy {
+    get imageName() { return "enemy_diver.webp"; }
+
+    constructor(game, x, y, bulletType, jumpHeight = 350) {
+        // 初期Yは画面最下部（game.height + 32）からスタートさせる仕様
+        // タイムラインで y: 0 と指定されても強制的に下から出すガードを配置
+        const startY = game ? game.height + 32 : y;
+        super(game, x, startY, bulletType, 1); // 一撃離脱なのでHP=1
+        
+        this.baseX = x;
+        this.hasShot = false; // 頂点での一発を管理するフラグ
+
+        // 物理パラメータ（放物線運動）
+        // 規定のジャンプ高度（画面下部からの引き算）に到達するような初期初速と重力を計算
+        this.vy = -7.5; // 上向きの初速（負のベクトル）
+        this.gravity = 0.15; // 毎フレーム加算される重力
+        
+        // 浮上時に少しだけ横移動（xが左側なら右へ、右側なら左へ緩やかにシフト）
+        this.vx = (x < (game ? game.width / 2 : 240)) ? 0.8 : -0.8;
     }
 
-    onDie(game) {
-        // 機械心臓が完全停止。ゲーム全体の画面を震撼させるグランドフィナーレの大爆発
-        for (let i = 0; i < 40; i++) {
-            setTimeout(() => {
-                game.collisions.createExplosion(
-                    this.x - 20 + Math.random() * (this.width + 40), 
-                    this.y - 20 + Math.random() * (this.height + 40), 
-                    { maxHp: 200 }
-                );
-            }, i * 60);
+    /**
+     * 動的生成用ファクトリメソッド
+     */
+    static create(game, x, y, bType, data = {}) {
+        return new DiverEnemy(game, x, y, bType);
+    }
+
+    update(game) {
+        if (!this.active) return;
+
+        // 位置の更新（放物線運動）
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += this.gravity; // 重力加速度で徐々に減速 → 落下へ
+
+        // 【頂点の判定】上方向への速度(vyが負)がゼロに近づいた（または超えた）瞬間
+        if (!this.hasShot && this.vy >= 0) {
+            this.shootAim(game);
+            this.hasShot = true;
         }
+
+        // 頂点を過ぎて再び画面下に消えていったら消滅
+        // 浮上直後に即消えないよう、vyがプラス（落下中）である条件も併用
+        if (this.vy > 0 && this.y > game.height + 50) {
+            this.active = false;
+        }
+    }
+
+    /**
+     * 自機狙い弾（aim）を1発だけ放つロジック
+     */
+    shootAim(game) {
+        if (typeof EnemyBullet === 'undefined') return;
+        if (!game.player || !game.player.alive) return;
+
+        // 自機へのベクトルを計算
+        const dx = game.player.x - this.x;
+        const dy = game.player.y - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist > 0) {
+            const bulletSpeed = 4.0; // 予習用なので、見てからかわせる適度な高速弾
+            const vx = (dx / dist) * bulletSpeed;
+            const vy = (dy / dist) * bulletSpeed;
+
+            game.entities.push(new EnemyBullet(this.x, this.y, vx, vy));
+            if (game.sc && game.sc.audio) game.sc.audio.playShot();
+        }
+    }
+}
+if (typeof ENEMY_REGISTRY !== 'undefined') {
+    ENEMY_REGISTRY.set('diver', DiverEnemy);
+}
+
+// =================================================================
+// 🆕 8. RockEnemy (高速落下・岩石型) 
+// =================================================================
+class RockEnemy extends Enemy {
+    get imageName() { return "enemy_rock.webp"; }
+
+    constructor(game, x, y, speedY = 6.0) {
+        super(game, x, y, 'none', 1); // 弾は撃たない('none')、仕様通りHP=1
+        this.speedY = speedY;
+    }
+
+    /**
+     * 動的生成用ファクトリメソッド
+     */
+    static create(game, x, y, bType, data = {}) {
+        const speedY = data.speedY !== undefined ? data.speedY : 6.0;
+        return new RockEnemy(game, x, y, speedY);
+    }
+
+    update(game) {
+        if (!this.active) return;
+        
+        this.y += this.speedY;
+
+        // 画面外（下部）へ消えたら非アクティブ化
+        if (this.y > game.height + 50) this.active = false;
+    }
+}
+if (typeof ENEMY_REGISTRY !== 'undefined') {
+    ENEMY_REGISTRY.set('rock', RockEnemy);
+}
+
+
+// =================================================================
+// 🆕 9. WormEnemy / WormSegment (連結エネミー)
+// =================================================================
+/**
+ * 連結エネミーの「頭部」クラス
+ * タイムライン（YAML）からはこの Head が生成されます
+ */
+class WormEnemy extends Enemy {
+    get imageName() { return "enemy_worm_head.webp"; }
+
+    constructor(game, x, y, bulletType, length = 5) {
+        super(game, x, y, bulletType, 1); // 頭部のHP=1
+        this.speedY = 1.0;
+        this.segments = []; // 胴体・お尻パーツの参照リスト
+        
+        // コンストラクタ内で連なる胴体パーツを動的に生成
+        if (game && game.entities) {
+            for (let i = 1; i < length; i++) {
+                // 初期位置は頭部の少し上にずらして配置
+                const seg = new WormSegment(game, x, y - (i * 24), this, i === length - 1);
+                this.segments.push(seg);
+                game.entities.push(seg); // ゲームのエンティティリストへ登録
+            }
+        }
+    }
+
+    /**
+     * 動的生成用ファクトリメソッド
+     * YAMLの data.length から連結数を指定可能（デフォルト5節）
+     */
+    static create(game, x, y, bType, data = {}) {
+        const length = data.length !== undefined ? data.length : 5;
+        return new WormEnemy(game, x, y, bType, length);
+    }
+
+    update(game) {
+        if (!this.active) return;
+        
+        this.y += this.speedY;
+
+        // 画面外へ消えたら自身を消滅
+        if (this.y > game.height + 50) this.active = false;
+    }
+
+    /**
+     * 頭部が撃破された時の処理（オーバーライド）
+     * 頭を撃たれたら、連なっている全パーツを巻き込んで爆破（連鎖爆破）
+     */
+    takeDamage(amount) {
+        const isDead = super.takeDamage(amount);
+        if (isDead) {
+            // 残っている全セグメントを強制的に撃破状態にする
+            this.segments.forEach(seg => {
+                if (seg.active) {
+                    seg.forceDestroy();
+                }
+            });
+        }
+        return isDead;
+    }
+
+    /**
+     * 胴体が破壊された時に、頭部側からリストを詰めて「縮める」ための内部処理
+     */
+    removeSegment(targetSeg) {
+        this.segments = this.segments.filter(seg => seg !== targetSeg);
+        
+        // 残ったパーツの追従インデックスを再計算し、隙間を詰めて縮める
+        this.segments.forEach((seg, index) => {
+            seg.reindex(index + 1);
+        });
+    }
+}
+if (typeof ENEMY_REGISTRY !== 'undefined') {
+    ENEMY_REGISTRY.set('worm', WormEnemy);
+}
+
+/**
+ * 連結エネミーの「胴体・お尻」パーツ用クラス（内部補助クラス）
+ */
+class WormSegment extends Enemy {
+    get imageName() { 
+        return this.isTail ? "enemy_worm_tail.webp" : "enemy_worm_body.webp"; 
+    }
+
+    constructor(game, x, y, headRef, index, isTail = false) {
+        super(game, x, y, 'none', 1); // 胴体は弾を撃たない、HP=1
+        this.head = headRef;         // 親（頭部）への参照
+        this.index = index;          // 頭から何番目か
+        this.isTail = isTail;        // 末尾パーツフラグ
+    }
+
+    update(game) {
+        if (!this.active) return;
+
+        // 原則として、親（頭部）が消滅したら自分も消える
+        if (!this.head || !this.head.active) {
+            this.active = false;
+            return;
+        }
+
+        // 頭部の位置を基準に、自分のインデックス分だけ上に綺麗に追従させる
+        this.x = this.head.x;
+        this.y = this.head.y - (this.index * 24);
+    }
+
+    /**
+     * 胴体部が直接撃たれて破壊された場合の処理
+     */
+    takeDamage(amount) {
+        const isDead = super.takeDamage(amount);
+        if (isDead && this.head) {
+            // 親（頭部）に対して、自分が破壊されたことを通知（縮小化処理を依頼）
+            this.head.removeSegment(this);
+        }
+        return isDead;
+    }
+
+    /**
+     * 頭部がやられた時に、上から連鎖的に爆破されるための強制破壊メソッド
+     */
+    forceDestroy() {
+        this.active = false;
+        // ※必要に応じて、ここに個別の爆発エフェクト生成やスコア加算ロジックを挿入
+        if (this.game && typeof Explosion !== 'undefined') {
+            this.game.entities.push(new Explosion(this.x, this.y));
+        }
+    }
+
+    /**
+     * 隙間が詰まった時にインデックスを修正するメソッド
+     */
+    reindex(newIndex) {
+        this.index = newIndex;
     }
 }
 
 
-// ==========================================
-// 4. 敵タイプに応じたインスタンス生成ファクトリ
-// ==========================================
+// =================================================================
+// 🆕 11. MineDebrisEnemy (炭鉱の浮遊物・無敵障害物)
+// =================================================================
+class MineDebrisEnemy extends Enemy {
+    get imageName() { return "enemy_mine_debris.webp"; }
 
-/**
- * 敵タイプに応じたインスタンスを生成して返す
- * @param {string} type 敵のタイプ名 ('sine', 'boss_03' など)
- * @param {Object} game ゲームメインの参照
- * @param {number} x 生成X座標
- * @param {number} y 生成Y座標
- * @param {string} bType 弾のタイプ
- * @param {Object} data YAMLから読み込んだ生データ（個別パラメータ抽出用）
- * @returns {Enemy} 生成された敵のインスタンス
- */
-function createEnemyInstance(type, game, x, y, bType, data) {
-    switch (type) {
-        case 'sine':
-            const sineEnemy = new SineEnemy(game, x, y, bType, data.phase || 0);
-            if (data.amplitude) sineEnemy.amplitude = data.amplitude;
-            if (data.frequency) sineEnemy.frequency = data.frequency;
-            return sineEnemy;
-
-        case 'stationary':
-            return new StationaryEnemy(
-                game, x, y, bType, data.hp || 1, 
-                data.stopY || 120, 
-                data.waitTime || 180
-            );
-
-        case 'assault':
-            return new AssaultEnemy(game, x, y, bType);
-
-        case 'hunter':
-            return new HunterEnemy(game, x, y, bType);
-
-        case 'shield':
-            return new ShieldEnemy(game, x, y, bType);
-
-        case 'scout':
-            const isLeftToRight = data.isLeft !== undefined ? data.isLeft : true;
-            return new ScoutEnemy(game, x, y, bType, isLeftToRight);
-
-        // 各ステージの個性豊かなボス・ルーティング群
-        case 'boss_01':
-            return new BossEnemy_01(game, x, y, data.hp, data.timeLimit, data.timeMultiplier);
-
-        case 'boss_02':
-            return new BossEnemy_02(game, x, y, data.hp, data.timeLimit, data.timeMultiplier);
-
-        case 'boss_03':
-            return new BossEnemy_03(game, x, y, data.hp, data.timeLimit, data.timeMultiplier);
-
-        case 'boss_04':
-            return new BossEnemy_04(game, x, y, data.hp, data.timeLimit, data.timeMultiplier);
-
-        case 'boss_05':
-            return new BossEnemy_05(game, x, y, data.hp, data.timeLimit, data.timeMultiplier);
-
-        case 'boss_06':
-            return new BossEnemy_06(game, x, y, data.hp, data.timeLimit, data.timeMultiplier);
-
-        case 'boss_07':
-            return new BossEnemy_07(game, x, y, data.hp, data.timeLimit, data.timeMultiplier);
-
-        case 'straight':
-        default:
-            return new StraightEnemy(game, x, y, bType, data.hp || 1);
+    constructor(game, x, y, speedY = 1.2) {
+        // 弾は撃たない('none')、絶対に壊れないようHPは巨大な値(Infinity)を設定
+        super(game, x, y, 'none', Infinity);
+        this.speedY = speedY;
     }
+
+    /**
+     * 動的生成用ファクトリメソッド
+     */
+    static create(game, x, y, bType, data = {}) {
+        const speedY = data.speedY !== undefined ? data.speedY : 1.2;
+        return new MineDebrisEnemy(game, x, y, speedY);
+    }
+
+    /**
+     * ダメージ処理を完全無効化（殺せない仕様のガード句）
+     */
+    takeDamage(amount) {
+        // 何点撃ち込まれても常に死亡判定は false（破壊不可）
+        // ※撃ち込み点数を入れたい、ピキピキと火花エフェクトを出したい場合はここに記述
+        return false;
+    }
+
+    update(game) {
+        if (!this.active) return;
+
+        // ふわふわとゆっくり降下してくる
+        this.y += this.speedY;
+
+        // 画面外に去ったら安全に消去
+        if (this.y > game.height + 50) this.active = false;
+    }
+}
+if (typeof ENEMY_REGISTRY !== 'undefined') {
+    ENEMY_REGISTRY.set('debris', MineDebrisEnemy);
 }

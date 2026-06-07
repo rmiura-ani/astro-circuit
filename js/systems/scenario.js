@@ -90,11 +90,12 @@ export class ScenarioManager {
                 }
             }
 
-            // 5. 既存の AssetManager を使って一括プリロードを実行
+            // 5. AssetManager を使って一括プリロードを実行
             const finalImages = [...new Set(imagesToPreload)];
             if (finalImages.length > 0) {
                 try {
-                    await assetManager.preload(finalImages); 
+                    const stagePath = `stage-${stageNum}`;
+                    await assetManager.preload(finalImages,stagePath); 
                 } catch (assetError) {
                     // 💡 画像ロード自体のエラーをラップして原因を絞り込む
                     throw new Error(`Image asset preload failed. (Check files: ${finalImages.slice(0, 3).join(', ')}...)`);

@@ -62,10 +62,29 @@ class Entity {
 }
 
 
-// ==========================================
-// 1. 敵キャラ、ボスキャラの基底（ベース）クラス
-// ==========================================
+// 敵クラスのファクトリ用レジストリ（名簿マップ）
+const ENEMY_REGISTRY = new Map();
 
+/**
+ * 敵タイプに応じたインスタンスを自動生成して返す（自動化版）
+ */
+function createEnemyInstance(type, game, x, y, bType, data = {}) {
+    // 登録されているクラスをマップから取得
+    const EnemyClass = ENEMY_REGISTRY.get(type);
+
+    // ガード句：未登録のタイプ、またはデフォルトは StraightEnemy にフォールバック
+    if (!EnemyClass) {
+        return new StraightEnemy(game, x, y, bType, data.hp || 1);
+    }
+
+    // 各クラスの静的メソッド（ファクトリの実体）を呼び出して生成
+    return EnemyClass.create(game, x, y, bType, data);
+}
+
+
+/**
+ * 敵キャラ、ボスキャラの基底（ベース）クラス
+ */
 class Enemy extends Entity {
     constructor(game, x, y, bulletType, hp = 1) {
         super(x, y, 32, 32);
@@ -415,7 +434,8 @@ class ScoreText {
  */
 class AssetManager {
     constructor(basePath) {
-        this.basePath = basePath;
+        this.basePath = basePath.endsWith('/') ? basePath : `${basePath}/`; // パスの末尾をスラッシュに統一
+        this.stagePath = null;  // 例: 'stage-1' など。未指定なら null
         this.imageCache = {};      // ロード完了した Image オブジェクトのキャッシュ
         this.loadingPromises = {}; // 二重ロードを防ぐための、現在ロード中のPromise
     }
@@ -432,40 +452,65 @@ class AssetManager {
         if (this.imageCache[key]) {
             return this.imageCache[key];
         }
-        if (!key || key.includes("LOOP") || key.includes("BOSS_TRIGGER") || !key.includes(".")) {
-            return Promise.resolve(null);
+        if (key.includes("LOOP") || key.includes("BOSS_TRIGGER") || !key.includes(".")) {
+            return null; // 元コードの不整合（Promiseを返していた部分）を修正してnullを返却
         }
+        
         // 2. まだロードが始まっていない初見の画像の場合、非同期ロードを裏で開始する
         if (!this.loadingPromises[key]) {
-            const url = `${this.basePath}${key}`;
-
+            
             this.loadingPromises[key] = new Promise(resolve => {
                 const img = new Image();
                 img.crossOrigin = "anonymous";
+
+                // ロード成功時の共通処理
                 img.onload = () => {
                     this.imageCache[key] = img; // キャッシュに格納
-                    console.log(`[Assets]  Ready: ${key}`);
+                    console.log(`[Assets] Ready: ${key} (from ${img.src})`);
                     resolve(img);
                 };
-                img.onerror = () => {
-                    console.error(`[Assets] ❌ Load failed: ${url}`);
-                    // エラー時は二重ロード防止を解除し、次回リトライ可能にする
-                    this.loadingPromises[key] = null;
-                    resolve(null);
-                };
-                img.src = url;
+
+                // サブフォルダ優先の読み込みロジック
+                if (this.stagePath) {
+                    const stageUrl = `${this.basePath}${this.stagePath}/${key}`;
+                    
+                    img.onerror = () => {
+                        // サブフォルダでの読み込みに失敗したら、ルートパス（本来の場所）で再トライ
+                        const fallbackUrl = `${this.basePath}${key}`;
+                        // console.log(`[Assets] Stage-specific asset not found. Trying fallback: ${fallbackUrl}`);
+                        
+                        // エラーハンドラをルートパス用の最終エラーハンドラに差し替えて再ロード
+                        img.onerror = () => {
+                            console.error(`[Assets] ❌ Load failed completely: ${key}`);
+                            this.loadingPromises[key] = null; // 次回リトライ可能にする
+                            resolve(null);
+                        };
+                        img.src = fallbackUrl;
+                    };
+                    
+                    img.src = stageUrl;
+                } else {
+                    // 通常時（ステージ指定なし）はルートパスから直接読み込み
+                    const defaultUrl = `${this.basePath}${key}`;
+                    img.onerror = () => {
+                        console.error(`[Assets] ❌ Load failed: ${defaultUrl}`);
+                        this.loadingPromises[key] = null;
+                        resolve(null);
+                    };
+                    img.src = defaultUrl;
+                }
             });
         }
 
         // 3. ロード中の場合は、一瞬だけ null が返る（ゲームループは止まらない）
-        // ※ 完全にロードされるまでの数フレーム間、透明になるか白丸で代用されます
         return null; 
     }
 
     /** 自機など、ゲーム開始時に「絶対に最初から画面にいないと困るもの」だけを
-     * 事前にロードしておきたい場合に使用するセーフティメソッド *\
+     * 事前にロードしておきたい場合に使用するセーフティメソッド
      */
-    async preload(keys) {
+    async preload(keys,stagePath) {
+         this.stagePath = stagePath;
         // すべてを get() に丸投げして、そのロード完了を待つ
         await Promise.all(keys.map(key => {
             this.get(key);
